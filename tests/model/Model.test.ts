@@ -1,0 +1,1152 @@
+import { describe, expect, test } from 'vitest';
+import {
+    Attribute,
+    type AttributeBag,
+    type Attributes,
+    type Cast,
+    type Casts,
+    MassAssignmentError,
+    Model,
+} from '../../src/main';
+
+interface UserAttributes {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    age: number;
+    meta: { tags: string[] };
+    created_at: Date;
+    fullName: string;
+}
+
+class User extends Model<UserAttributes> {
+    /**
+     * Get the attributes that should be cast.
+     */
+    override casts(): Casts<UserAttributes> {
+        return {
+            id        : 'int',
+            age       : 'int',
+            meta      : 'json',
+            created_at: 'datetime',
+        };
+    }
+
+    /**
+     * Get the accessor and mutator definitions.
+     */
+    override mutators(): Attributes<UserAttributes> {
+        return {
+            fullName: Attribute.make<string>({
+                get: (_value: unknown, attributes: AttributeBag<UserAttributes>): string => `${String(attributes['first_name'])} ${String(attributes['last_name'])}`,
+                set: (value: string): unknown => {
+                    const [first, last]: string[] = value.split(' ');
+
+                    return { first_name: first, last_name: last };
+                },
+            }),
+            email   : Attribute.set<string>((value: string): unknown => value.toLowerCase()),
+        };
+    }
+
+    /**
+     * Get the attribute keys that are mass assignable.
+     */
+    override fillable(): (keyof UserAttributes & string)[] {
+        return ['first_name', 'last_name', 'email', 'age', 'meta', 'created_at'];
+    }
+
+    /**
+     * Get the default attribute values.
+     */
+    override defaults(): Partial<UserAttributes> {
+        return { age: 18 };
+    }
+}
+
+interface User extends UserAttributes {
+}
+
+class Open extends Model {
+}
+
+interface ItemAttributes {
+    name: string;
+    price: number;
+    meta: { tags: string[] };
+    created_at: Date;
+}
+
+class Item extends Model<ItemAttributes> {
+    /**
+     * Get the attributes that should be cast.
+     */
+    override casts(): Casts<ItemAttributes> {
+        return {
+            price     : 'float',
+            meta      : 'json',
+            created_at: 'datetime',
+        };
+    }
+}
+
+interface Item extends ItemAttributes {
+}
+
+interface AccountAttributes {
+    name: string;
+    email: string;
+    age: number;
+    meta: { tags: string[] };
+    created_at: Date;
+    banner: string;
+}
+
+class Account extends Model<AccountAttributes> {
+    /**
+     * Get the attributes that should be cast.
+     */
+    override casts(): Casts<AccountAttributes> {
+        return {
+            age       : 'int',
+            meta      : 'json',
+            created_at: 'datetime',
+        };
+    }
+
+    /**
+     * Get the accessor and mutator definitions.
+     */
+    override mutators(): Attributes<AccountAttributes> {
+        return {
+            banner: Attribute.get<string>((_value: unknown, attributes: AttributeBag<AccountAttributes>): string => `Hi ${String(attributes['name'])}`),
+        };
+    }
+
+    /**
+     * Get the attribute keys hidden from serialization.
+     */
+    override hidden(): (keyof AccountAttributes & string)[] {
+        return ['email'];
+    }
+
+    /**
+     * Get the virtual keys appended to serialization.
+     */
+    override appends(): (keyof AccountAttributes & string)[] {
+        return ['banner'];
+    }
+}
+
+interface Account extends AccountAttributes {
+}
+
+interface PersonAttributes {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    settings: { theme: string };
+    created_at: Date;
+    fullName: string;
+}
+
+class Frozen implements Cast<{ theme: string }> {
+    /**
+     * Freeze the raw settings object on read.
+     */
+    get(value: unknown): { theme: string } {
+        return Object.freeze({ ...(value as { theme: string }) });
+    }
+
+    /**
+     * Store the settings object as given.
+     */
+    set(value: { theme: string }): unknown {
+        return value;
+    }
+}
+
+class Person extends Model<PersonAttributes> {
+    /**
+     * Get the attributes that should be cast.
+     */
+    override casts(): Casts<PersonAttributes> {
+        return {
+            id        : 'int',
+            settings  : new Frozen(),
+            created_at: 'datetime',
+        };
+    }
+
+    /**
+     * Get the accessor and mutator definitions.
+     */
+    override mutators(): Attributes<PersonAttributes> {
+        return {
+            fullName: Attribute.make<string>({
+                get: (_value: unknown, attributes: AttributeBag<PersonAttributes>): string => `${String(attributes['first_name'])} ${String(attributes['last_name'])}`,
+                set: (value: string): unknown => {
+                    const [first, last]: string[] = value.split(' ');
+
+                    return { first_name: first, last_name: last };
+                },
+            }),
+        };
+    }
+
+    /**
+     * Get the attribute keys that are mass assignable.
+     */
+    override fillable(): (keyof PersonAttributes & string)[] {
+        return ['first_name', 'last_name', 'email', 'settings', 'created_at'];
+    }
+
+    /**
+     * Get the attribute keys hidden from serialization.
+     */
+    override hidden(): (keyof PersonAttributes & string)[] {
+        return ['email'];
+    }
+
+    /**
+     * Get the virtual keys appended to serialization.
+     */
+    override appends(): (keyof PersonAttributes & string)[] {
+        return ['fullName'];
+    }
+}
+
+interface Person extends PersonAttributes {
+}
+
+describe('Model.constructor', (): void => {
+    test('applies defaults, then mass-fills the given attributes', (): void => {
+        const user: User = new User({ first_name: 'Ana', age: 30 });
+
+        expect(user.raw('age')).toEqual(30);
+        expect(user.raw('first_name')).toEqual('Ana');
+        expect(new User().raw('age')).toEqual(18);
+    });
+
+    test('silently discards non-fillable keys by default', (): void => {
+        const user: User = new User({ id: 99 });
+
+        expect(user.raw('id')).toBeUndefined();
+    });
+
+    test('fills everything when no fillable or guarded lists are declared', (): void => {
+        const open: Open = new Open({ anything: 'goes' });
+
+        expect(open.raw('anything')).toEqual('goes');
+    });
+});
+
+describe('Model.casts', (): void => {
+    const upper: Cast<string> = {
+        get: (value: unknown): string => String(value).toUpperCase(),
+        set: (value: string): unknown => value.toLowerCase(),
+    };
+
+    class Caster extends Model {
+        /**
+         * Get the attributes that should be cast.
+         */
+        override casts(): Casts<AttributeBag> {
+            return {
+                int      : 'int',
+                integer  : 'integer',
+                float    : 'float',
+                double   : 'double',
+                number   : 'number',
+                string   : 'string',
+                bool     : 'bool',
+                boolean  : 'boolean',
+                json     : 'json',
+                array    : 'array',
+                object   : 'object',
+                date     : 'date',
+                datetime : 'datetime',
+                timestamp: 'timestamp',
+                decimal  : 'decimal:2',
+                zero     : 'decimal:0',
+                custom   : upper,
+                broken   : 'nonsense' as never,
+                precision: 'decimal:nope' as never,
+                negative : 'decimal:-1' as never,
+            };
+        }
+    }
+
+    test('returns the declared cast map', (): void => {
+        expect(new User().casts()).toEqual({ id: 'int', age: 'int', meta: 'json', created_at: 'datetime' });
+    });
+
+    test('passes null and undefined through untouched on read', (): void => {
+        const caster: Caster = Caster.hydrate({ int: null, json: undefined });
+
+        expect(caster.get('int')).toBeNull();
+        expect(caster.get('json')).toBeUndefined();
+    });
+
+    test('casts integers by truncating numerics', (): void => {
+        const caster: Caster = Caster.hydrate({ int: '42.9', integer: 7.9 });
+
+        expect(caster.get('int')).toEqual(42);
+        expect(caster.get('integer')).toEqual(7);
+    });
+
+    test('casts floats and numbers', (): void => {
+        const caster: Caster = Caster.hydrate({ float: '3.14', double: '2.5', number: '1e3' });
+
+        expect(caster.get('float')).toEqual(3.14);
+        expect(caster.get('double')).toEqual(2.5);
+        expect(caster.get('number')).toEqual(1000);
+    });
+
+    test('casts strings', (): void => {
+        expect(Caster.hydrate({ string: 42 }).get('string')).toEqual('42');
+    });
+
+    test('casts booleans with PHP-like semantics', (): void => {
+        const caster: Caster = new Caster();
+
+        expect(caster.set('bool', '0').get('bool')).toEqual(false);
+        expect(caster.set('bool', '').get('bool')).toEqual(false);
+        expect(caster.set('bool', 'false').get('bool')).toEqual(false);
+        expect(caster.set('bool', 0).get('bool')).toEqual(false);
+        expect(caster.set('bool', false).get('bool')).toEqual(false);
+        expect(caster.set('boolean', 1).get('boolean')).toEqual(true);
+        expect(caster.set('boolean', 'yes').get('boolean')).toEqual(true);
+    });
+
+    test('parses json strings and passes parsed data through', (): void => {
+        const caster: Caster = Caster.hydrate({ json: '{"a":1}', array: [1, 2], object: { b: 2 } });
+
+        expect(caster.get('json')).toEqual({ a: 1 });
+        expect(caster.get('array')).toEqual([1, 2]);
+        expect(caster.get('object')).toEqual({ b: 2 });
+    });
+
+    test('casts dates to local start of day', (): void => {
+        const value: Date = Caster.hydrate({ date: '2026-08-23T15:30:00.000Z' }).get('date') as Date;
+
+        expect(value).toBeInstanceOf(Date);
+        expect(value.getHours()).toEqual(0);
+        expect(value.getMinutes()).toEqual(0);
+    });
+
+    test('casts datetimes from strings, unix seconds, numeric strings, and Dates', (): void => {
+        const reader = (raw: unknown): Date => Caster.hydrate({ datetime: raw }).get('datetime') as Date;
+
+        expect(reader('2026-08-23T10:00:00.000Z').toISOString()).toEqual('2026-08-23T10:00:00.000Z');
+        expect(reader(1756000000).getTime()).toEqual(1756000000000);
+        expect(reader('1756000000').getTime()).toEqual(1756000000000);
+        expect(reader('1756000000.75').getTime()).toEqual(1756000000750);
+
+        const source: Date = new Date('2026-01-01T00:00:00.000Z');
+        const copied: Date = reader(source);
+
+        expect(copied.getTime()).toEqual(source.getTime());
+        expect(copied).not.toBe(source);
+    });
+
+    test('casts timestamps to unix seconds on read', (): void => {
+        expect(Caster.hydrate({ timestamp: '2026-08-23T10:00:00.000Z' }).get('timestamp')).toEqual(1787479200);
+        expect(Caster.hydrate({ timestamp: 1756000000 }).get('timestamp')).toEqual(1756000000);
+        expect(Caster.hydrate({ timestamp: '1756000000.75' }).get('timestamp')).toEqual(1756000000);
+    });
+
+    test('formats decimals with fixed places', (): void => {
+        const caster: Caster = Caster.hydrate({ decimal: 3.14159, zero: '7.9' });
+
+        expect(caster.get('decimal')).toEqual('3.14');
+        expect(caster.get('zero')).toEqual('8');
+    });
+
+    test('throws on invalid decimal precision', (): void => {
+        expect((): unknown => Caster.hydrate({ precision: 1 }).get('precision')).toThrow(TypeError);
+        expect((): unknown => Caster.hydrate({ negative: 1 }).get('negative')).toThrow(TypeError);
+        expect((): unknown => Caster.hydrate({ precision: null }).get('precision')).toThrow(TypeError);
+    });
+
+    test('throws on unknown cast strings even for null values', (): void => {
+        expect((): unknown => Caster.hydrate({ broken: 1 }).get('broken')).toThrow('Unknown cast type [nonsense] for attribute [broken].');
+        expect((): unknown => Caster.hydrate({ broken: null }).get('broken')).toThrow(TypeError);
+    });
+
+    test('delegates reads and writes to custom cast instances', (): void => {
+        expect(Caster.hydrate({ custom: 'abc' }).get('custom')).toEqual('ABC');
+        expect(new Caster().set('custom', 'ABC').raw('custom')).toEqual('abc');
+    });
+
+    test('applies custom casts with memoized identity', (): void => {
+        const person: Person = new Person({ settings: { theme: 'dark' } });
+
+        expect(person.settings.theme).toEqual('dark');
+        expect(Object.isFrozen(person.settings)).toEqual(true);
+        expect(person.settings).toBe(person.settings);
+    });
+
+    test('passes null and undefined through untouched on write', (): void => {
+        const caster: Caster = new Caster();
+
+        expect(caster.set('datetime', null).raw('datetime')).toBeNull();
+        expect(caster.set('int', undefined).raw('int')).toBeUndefined();
+    });
+
+    test('normalizes Date instances to ISO strings for date and datetime on write', (): void => {
+        const caster: Caster = new Caster();
+
+        expect(caster.set('datetime', new Date('2026-08-23T10:00:00.000Z')).raw('datetime')).toEqual('2026-08-23T10:00:00.000Z');
+        expect(caster.set('date', new Date('2026-08-23T10:00:00.000Z')).raw('date')).toEqual('2026-08-23T10:00:00.000Z');
+        expect(caster.set('datetime', '2026-08-23').raw('datetime')).toEqual('2026-08-23');
+    });
+
+    test('normalizes timestamps to unix seconds on write', (): void => {
+        const caster: Caster = new Caster();
+
+        expect(caster.set('timestamp', new Date('2026-08-23T10:00:00.000Z')).raw('timestamp')).toEqual(1787479200);
+        expect(caster.set('timestamp', '2026-08-23T10:00:00.000Z').raw('timestamp')).toEqual(1787479200);
+        expect(caster.set('timestamp', 1756000000.9).raw('timestamp')).toEqual(1756000000);
+    });
+
+    test('stores every other built-in cast value as given on write', (): void => {
+        const caster: Caster = new Caster();
+        const parsed: object = { a: 1 };
+
+        expect(caster.set('int', '42').raw('int')).toEqual('42');
+        expect(caster.set('json', parsed).raw('json')).toBe(parsed);
+        expect(caster.set('decimal', 3.14159).raw('decimal')).toEqual(3.14159);
+    });
+
+    test('throws on unknown cast strings and invalid decimal precision on write', (): void => {
+        const caster: Caster = new Caster();
+
+        expect((): unknown => caster.set('broken', 1)).toThrow('Unknown cast type [nonsense] for attribute [broken].');
+        expect((): unknown => caster.set('broken', null)).toThrow(TypeError);
+        expect((): unknown => caster.set('precision', 5)).toThrow(TypeError);
+        expect((): unknown => caster.set('negative', 5)).toThrow(TypeError);
+    });
+});
+
+describe('Model.get', (): void => {
+    test('applies casts on read', (): void => {
+        const user: User = new User();
+
+        user.set('age', '35');
+
+        expect(user.get('age')).toEqual(35);
+    });
+
+    test('parses json strings once and memoizes the object', (): void => {
+        const user: User = new User();
+
+        user.set('meta', '{"tags":["a"]}');
+
+        expect(user.get('meta')).toEqual({ tags: ['a'] });
+        expect(user.get('meta')).toBe(user.get('meta'));
+    });
+
+    test('runs accessors over casts with the raw value', (): void => {
+        const user: User = new User({ first_name: 'Ana', last_name: 'Kovač' });
+
+        expect(user.get('fullName')).toEqual('Ana Kovač');
+    });
+});
+
+describe('Model.set', (): void => {
+    test('invalidates the memo on set', (): void => {
+        const user: User = new User();
+
+        user.set('created_at', new Date('2026-01-01T00:00:00.000Z'));
+
+        const before: Date = user.get('created_at');
+
+        user.set('created_at', new Date('2026-02-02T00:00:00.000Z'));
+
+        expect(user.get('created_at')).not.toBe(before);
+        expect(user.get('created_at').toISOString()).toEqual('2026-02-02T00:00:00.000Z');
+    });
+
+    test('runs mutators on write, including multi-attribute results', (): void => {
+        const user: User = new User();
+
+        user.set('email', 'ANA@EXAMPLE.COM');
+
+        expect(user.raw('email')).toEqual('ana@example.com');
+
+        user.set('fullName', 'Iva Horvat');
+
+        expect(user.raw('first_name')).toEqual('Iva');
+        expect(user.raw('last_name')).toEqual('Horvat');
+    });
+
+    test('stores plain objects as values via the { key: object } mutator form', (): void => {
+        interface BoxAttributes {
+            meta: { a: number };
+        }
+
+        class Box extends Model<BoxAttributes> {
+            /**
+             * Get the accessor and mutator definitions.
+             */
+            override mutators(): Attributes<BoxAttributes> {
+                return { meta: Attribute.set<{ a: number }>((value: { a: number }): unknown => ({ meta: value })) };
+            }
+        }
+
+        const box: Box = new Box();
+
+        box.set('meta', { a: 1 });
+
+        expect(box.raw('meta')).toEqual({ a: 1 });
+    });
+
+    test('stores null-prototype mutator results as multiple raw attributes', (): void => {
+        class Nulled extends Model {
+            /**
+             * Get the accessor and mutator definitions.
+             */
+            override mutators(): Attributes<AttributeBag> {
+                return {
+                    pair: Attribute.set<unknown>((value: unknown): unknown => {
+                        const bag: AttributeBag = Object.create(null) as AttributeBag;
+
+                        bag['left'] = value;
+                        bag['right'] = value;
+
+                        return bag;
+                    }),
+                };
+            }
+        }
+
+        const nulled: Nulled = new Nulled();
+
+        nulled.set('pair', 'x');
+
+        expect(nulled.raw('left')).toEqual('x');
+        expect(nulled.raw('right')).toEqual('x');
+    });
+
+    test('writes raw directly when a key has a get-only accessor', (): void => {
+        interface TagAttributes {
+            label: string;
+        }
+
+        class Tag extends Model<TagAttributes> {
+            /**
+             * Get the accessor and mutator definitions.
+             */
+            override mutators(): Attributes<TagAttributes> {
+                return { label: Attribute.get<string>((value: unknown): string => String(value).toUpperCase()) };
+            }
+        }
+
+        const tag: Tag = new Tag();
+
+        tag.set('label', 'shiny');
+
+        expect(tag.raw('label')).toEqual('shiny');
+        expect(tag.get('label')).toEqual('SHINY');
+    });
+
+    test('normalizes datetime writes to ISO strings in raw storage', (): void => {
+        const user: User = new User();
+
+        user.set('created_at', new Date('2026-08-23T10:00:00.000Z'));
+
+        expect(user.raw('created_at')).toEqual('2026-08-23T10:00:00.000Z');
+        expect(user.get('created_at')).toBeInstanceOf(Date);
+    });
+
+    test('passes uncast, undefined-definition keys straight through', (): void => {
+        const open: Open = new Open();
+
+        open.set('plain', 42);
+
+        expect(open.get('plain')).toEqual(42);
+    });
+
+    test('accepts keys outside the declared attribute interface', (): void => {
+        const user: User = new User();
+
+        user.set('address', 'Elm Street');
+
+        expect(user.get('address')).toEqual('Elm Street');
+        expect(user.has('address')).toEqual(true);
+        expect(user.forceFill({ city: 'Copenhagen' }).get('city')).toEqual('Copenhagen');
+    });
+});
+
+describe('Model.fill', (): void => {
+    test('lets fillable win when both lists are declared', (): void => {
+        interface BothAttributes {
+            a: number;
+            b: number;
+        }
+
+        class Both extends Model<BothAttributes> {
+            /**
+             * Get the attribute keys that are mass assignable.
+             */
+            override fillable(): (keyof BothAttributes & string)[] {
+                return ['a'];
+            }
+
+            /**
+             * Get the attribute keys that are guarded from mass assignment.
+             */
+            override guarded(): (keyof BothAttributes & string)[] {
+                return ['a', 'b'];
+            }
+        }
+
+        const both: Both = new Both({ a: 1, b: 2 });
+
+        expect(both.raw('a')).toEqual(1);
+        expect(both.raw('b')).toBeUndefined();
+    });
+
+    test('discards guarded keys when only guarded is declared', (): void => {
+        interface SafeAttributes {
+            open: string;
+            locked: string;
+        }
+
+        class Safe extends Model<SafeAttributes> {
+            /**
+             * Get the attribute keys that are guarded from mass assignment.
+             */
+            override guarded(): (keyof SafeAttributes & string)[] {
+                return ['locked'];
+            }
+        }
+
+        const safe: Safe = new Safe({ open: 'yes', locked: 'no' });
+
+        expect(safe.raw('open')).toEqual('yes');
+        expect(safe.raw('locked')).toBeUndefined();
+    });
+
+    test('throws in strict mode instead of discarding', (): void => {
+        Model.strict = true;
+
+        try {
+            expect((): User => new User({ id: 1 })).toThrow(MassAssignmentError);
+        } finally {
+            Model.strict = false;
+        }
+    });
+});
+
+describe('Model.forceFill', (): void => {
+    test('bypasses guarding while still applying casts', (): void => {
+        const user: User = new User();
+
+        // @ts-expect-error
+        user.forceFill({ id: '7' });
+
+        expect(user.get('id')).toEqual(7);
+    });
+});
+
+describe('Model.raw', (): void => {
+    test('returns a copy of all raw attributes', (): void => {
+        const user: User = new User({ first_name: 'Ana' });
+        const bag: AttributeBag = user.raw();
+
+        expect(bag['first_name']).toEqual('Ana');
+
+        bag['first_name'] = 'mutated';
+
+        expect(user.raw('first_name')).toEqual('Ana');
+    });
+});
+
+describe('Model.has', (): void => {
+    test('reports raw and virtual attribute presence', (): void => {
+        const user: User = new User({ first_name: 'Ana' });
+
+        expect(user.has('first_name')).toEqual(true);
+        expect(user.has('fullName')).toEqual(true);
+        expect(user.has('missing')).toEqual(false);
+    });
+
+    test('does not report set-only mutator keys as present', (): void => {
+        const user: User = new User();
+
+        expect(user.has('email')).toEqual(false);
+
+        user.set('email', 'A@B.C');
+
+        expect(user.has('email')).toEqual(true);
+    });
+});
+
+describe('Model.forget', (): void => {
+    test('forgets attributes and their memoized values', (): void => {
+        const user: User = new User();
+
+        user.set('meta', { tags: ['x'] });
+        user.forget('meta');
+
+        expect(user.raw('meta')).toBeUndefined();
+        expect(user.has('meta')).toEqual(false);
+    });
+});
+
+describe('Model.sync', (): void => {
+    test('syncs without cloning exotic values', (): void => {
+        const parent: Open = new Open();
+
+        parent.set('child', new Open({ nested: true }));
+        parent.set('tags', ['a', 'b']);
+        parent.set('meta', { deep: { level: 1 } });
+
+        expect((): Open => parent.sync()).not.toThrow();
+        expect((parent.raw('child') as Open).raw('nested')).toEqual(true);
+    });
+});
+
+describe('Model.dirty', (): void => {
+    test('marks constructor-filled attributes dirty and defaults clean', (): void => {
+        interface DefaultedAttributes {
+            kind: string;
+            name: string;
+        }
+
+        class Defaulted extends Model<DefaultedAttributes> {
+            /**
+             * Get the default attribute values.
+             */
+            override defaults(): Partial<DefaultedAttributes> {
+                return { kind: 'basic' };
+            }
+        }
+
+        const model: Defaulted = new Defaulted({ name: 'X' });
+
+        expect(model.dirty()).toEqual(true);
+        expect(model.dirty('name')).toEqual(true);
+        expect(model.dirty('kind')).toEqual(false);
+    });
+
+    test('reports clean after sync and dirty after set', (): void => {
+        const item: Item = new Item({ name: 'Pen' });
+
+        item.sync();
+
+        expect(item.dirty()).toEqual(false);
+
+        item.set('name', 'Pencil');
+
+        expect(item.dirty('name', 'price')).toEqual(true);
+        expect(item.dirty('price')).toEqual(false);
+    });
+
+    test('compares object values structurally, not by reference', (): void => {
+        const item: Item = new Item({ meta: { tags: ['a'] } });
+
+        item.sync();
+        item.set('meta', { tags: ['a'] });
+
+        expect(item.dirty()).toEqual(false);
+
+        item.set('meta', { tags: ['b'] });
+
+        expect(item.dirty('meta')).toEqual(true);
+    });
+
+    test('detects in-place mutation of json objects thanks to cloned originals', (): void => {
+        const item: Item = new Item({ meta: { tags: ['a'] } });
+
+        item.sync();
+        (item.raw('meta') as { tags: string[] }).tags.push('b');
+
+        expect(item.dirty('meta')).toEqual(true);
+    });
+
+    test('treats string-number changes as dirty (stricter than Eloquent)', (): void => {
+        const item: Item = new Item({ price: 5 });
+
+        item.sync();
+        // @ts-expect-error
+        item.forceFill({ price: '5' });
+
+        expect(item.dirty('price')).toEqual(true);
+    });
+
+    test('treats distinct exotic references as dirty even when they stringify alike', (): void => {
+        class Holder extends Model {
+        }
+
+        const holder: Holder = new Holder();
+
+        holder.set('child', new Holder());
+        holder.sync();
+        holder.set('child', new Holder());
+
+        expect(holder.dirty('child')).toEqual(true);
+    });
+
+    test('compares arrays structurally in both directions', (): void => {
+        class Holder extends Model {
+        }
+
+        const holder: Holder = new Holder();
+
+        holder.set('tags', ['a']);
+        holder.sync();
+        holder.set('tags', ['a', 'b']);
+
+        expect(holder.dirty('tags')).toEqual(true);
+
+        holder.set('tags', ['a']);
+
+        expect(holder.dirty('tags')).toEqual(false);
+    });
+});
+
+describe('Model.changes', (): void => {
+    test('returns the changed raw attributes since the last sync', (): void => {
+        const item: Item = new Item({ name: 'Pen' });
+
+        item.sync();
+        item.set('name', 'Pencil');
+
+        expect(item.changes()).toEqual({ name: 'Pencil' });
+    });
+});
+
+describe('Model.original', (): void => {
+    test('returns cast-applied originals', (): void => {
+        const item: Item = new Item({ created_at: new Date('2026-01-01T00:00:00.000Z'), name: 'Pen' });
+
+        item.sync();
+        item.set('created_at', new Date('2026-06-06T00:00:00.000Z'));
+
+        expect((item.original('created_at') as Date).toISOString()).toEqual('2026-01-01T00:00:00.000Z');
+
+        const bag: AttributeBag = item.original();
+
+        expect(bag['name']).toEqual('Pen');
+        expect((bag['created_at'] as Date).toISOString()).toEqual('2026-01-01T00:00:00.000Z');
+    });
+});
+
+describe('Model.discard', (): void => {
+    test('discards changes back to the original state', (): void => {
+        const item: Item = new Item({ name: 'Pen', meta: { tags: ['a'] } });
+
+        item.sync();
+        item.set('name', 'Pencil');
+        item.set('meta', { tags: ['z'] });
+        item.discard();
+
+        expect(item.dirty()).toEqual(false);
+        expect(item.get('name')).toEqual('Pen');
+        expect(item.get('meta')).toEqual({ tags: ['a'] });
+    });
+
+    test('discards and re-syncs across the whole pipeline', (): void => {
+        const person: Person = Person.hydrate({ first_name: 'Ana', settings: { theme: 'dark' } });
+
+        person.first_name = 'Iva';
+        person.settings = { theme: 'light' };
+        person.discard();
+
+        expect(person.first_name).toEqual('Ana');
+        expect(person.settings.theme).toEqual('dark');
+
+        person.first_name = 'Mia';
+        person.sync();
+
+        expect(person.dirty()).toEqual(false);
+    });
+});
+
+describe('Model.hydrate', (): void => {
+    test('creates a clean model from trusted raw data, bypassing guards and mutators', (): void => {
+        interface LockedAttributes {
+            id: number;
+            secret: string;
+        }
+
+        class Locked extends Model<LockedAttributes> {
+            /**
+             * Get the attribute keys that are mass assignable.
+             */
+            override fillable(): (keyof LockedAttributes & string)[] {
+                return ['secret'];
+            }
+        }
+
+        const locked: Locked = Locked.hydrate({ id: 5, secret: 'raw' });
+
+        expect(locked.raw('id')).toEqual(5);
+        expect(locked.dirty()).toEqual(false);
+    });
+
+    test('replaces defaults entirely, mirroring newFromBuilder', (): void => {
+        interface StampedAttributes {
+            kind: string;
+        }
+
+        class Stamped extends Model<StampedAttributes> {
+            /**
+             * Get the default attribute values.
+             */
+            override defaults(): Partial<StampedAttributes> {
+                return { kind: 'basic' };
+            }
+        }
+
+        const stamped: Stamped = Stamped.hydrate({});
+
+        expect(stamped.raw('kind')).toBeUndefined();
+    });
+
+    test('applies casts on read of hydrated raw strings', (): void => {
+        const item: Item = Item.hydrate({ meta: '{"tags":["a"]}', created_at: '2026-01-01T00:00:00.000Z' });
+
+        expect(item.get('meta')).toEqual({ tags: ['a'] });
+        expect(item.get('created_at')).toBeInstanceOf(Date);
+    });
+
+    test('constructs dirty, hydrates clean', (): void => {
+        expect(new Person({ first_name: 'Ana' }).dirty()).toEqual(true);
+        expect(Person.hydrate({ first_name: 'Ana' }).dirty()).toEqual(false);
+    });
+});
+
+describe('Model.toJSON', (): void => {
+    test('applies casts and accessors, appends virtuals, and hides hidden keys', (): void => {
+        const account: Account = new Account({ name: 'Ana', email: 'a@b.c', age: '30' as unknown as number });
+        const output: AttributeBag = account.toJSON();
+
+        expect(output).toEqual({ name: 'Ana', age: 30, banner: 'Hi Ana' });
+        expect('email' in output).toEqual(false);
+    });
+
+    test('round-trips through JSON.stringify with ISO dates', (): void => {
+        const account: Account = new Account({ name: 'Ana', created_at: new Date('2026-08-23T10:00:00.000Z') });
+        const parsed: AttributeBag = JSON.parse(JSON.stringify(account)) as AttributeBag;
+
+        expect(parsed['created_at']).toEqual('2026-08-23T10:00:00.000Z');
+        expect(parsed['banner']).toEqual('Hi Ana');
+    });
+
+    test('lets a non-empty visible whitelist win first', (): void => {
+        interface NarrowAttributes {
+            a: number;
+            b: number;
+        }
+
+        class Narrow extends Model<NarrowAttributes> {
+            /**
+             * Get the serialization whitelist.
+             */
+            override visible(): (keyof NarrowAttributes & string)[] {
+                return ['a'];
+            }
+        }
+
+        const narrow: Narrow = new Narrow({ a: 1, b: 2 });
+
+        expect(narrow.toJSON()).toEqual({ a: 1 });
+    });
+
+    test('serializes with hidden and appended keys and ISO dates', (): void => {
+        const person: Person = Person.hydrate({
+            first_name: 'Ana',
+            last_name : 'K',
+            email     : 'a@b.c',
+            created_at: '2026-08-23T10:00:00.000Z',
+        });
+        const parsed: AttributeBag = JSON.parse(JSON.stringify(person)) as AttributeBag;
+
+        expect(parsed['fullName']).toEqual('Ana K');
+        expect(parsed['created_at']).toEqual('2026-08-23T10:00:00.000Z');
+        expect('email' in parsed).toEqual(false);
+    });
+});
+
+describe('Model.only', (): void => {
+    test('returns a cast-applied subset of the attributes', (): void => {
+        const account: Account = new Account({ name: 'Ana', email: 'a@b.c', age: '30' as unknown as number });
+
+        expect(account.only('name', 'age')).toEqual({ name: 'Ana', age: 30 });
+    });
+});
+
+describe('Model.except', (): void => {
+    test('returns all cast-applied attributes except the given keys', (): void => {
+        const account: Account = new Account({ name: 'Ana', email: 'a@b.c', age: '30' as unknown as number });
+
+        expect(account.except('email', 'age')).toEqual({ name: 'Ana' });
+    });
+});
+
+describe('Model.hide', (): void => {
+    test('hides keys from serialization at runtime', (): void => {
+        const account: Account = new Account({ name: 'Ana', email: 'a@b.c' });
+
+        account.hide('name');
+
+        expect(account.toJSON()).toEqual({ banner: 'Hi Ana' });
+    });
+});
+
+describe('Model.show', (): void => {
+    test('reveals hidden keys at runtime', (): void => {
+        const account: Account = new Account({ name: 'Ana', email: 'a@b.c' });
+
+        account.show('email');
+
+        expect(account.toJSON()).toEqual({ name: 'Ana', email: 'a@b.c', banner: 'Hi Ana' });
+    });
+
+    test('adds shown keys to a non-empty whitelist', (): void => {
+        interface ListedAttributes {
+            a: number;
+            b: number;
+        }
+
+        class Listed extends Model<ListedAttributes> {
+            /**
+             * Get the serialization whitelist.
+             */
+            override visible(): (keyof ListedAttributes & string)[] {
+                return ['a'];
+            }
+        }
+
+        const listed: Listed = new Listed({ a: 1, b: 2 });
+
+        listed.show('b');
+
+        expect(listed.toJSON()).toEqual({ a: 1, b: 2 });
+    });
+});
+
+describe('Model.append', (): void => {
+    test('appends virtual keys to serialization at runtime', (): void => {
+        interface BareAttributes {
+            x: number;
+            upper: string;
+        }
+
+        class Bare extends Model<BareAttributes> {
+            /**
+             * Get the accessor and mutator definitions.
+             */
+            override mutators(): Attributes<BareAttributes> {
+                return {
+                    upper: Attribute.get<string>((_value: unknown, attributes: AttributeBag<BareAttributes>): string => String(attributes['x']).toUpperCase()),
+                };
+            }
+        }
+
+        const bare: Bare = new Bare({ x: 1 });
+
+        expect(bare.toJSON()).toEqual({ x: 1 });
+
+        bare.append('upper');
+
+        expect(bare.toJSON()).toEqual({ x: 1, upper: '1' });
+    });
+});
+
+describe('Model.proxy', (): void => {
+    test('routes direct property access through the pipeline', (): void => {
+        const user: User = new User();
+
+        user.age = '40' as unknown as number;
+
+        expect(user.age).toEqual(40);
+
+        user.email = 'UPPER@CASE.COM';
+
+        expect(user.raw('email')).toEqual('upper@case.com');
+    });
+
+    test('runs the full pipeline through direct property access', (): void => {
+        const person: Person = Person.hydrate({ id: '7', first_name: 'Ana', last_name: 'Kovač', email: 'a@b.c' });
+
+        expect(person.id).toEqual(7);
+        expect(person.fullName).toEqual('Ana Kovač');
+
+        person.fullName = 'Iva Horvat';
+
+        expect(person.first_name).toEqual('Iva');
+        expect(person.dirty('last_name')).toEqual(true);
+    });
+
+    test('shadows attributes with class members and supports in/delete', (): void => {
+        const open: Open = new Open({ fill: 'attribute-value', email: 'a@b.c' });
+
+        expect(typeof open.fill).toEqual('function');
+        expect(open.get('fill')).toEqual('attribute-value');
+        expect('fill' in open).toEqual(true);
+        expect('email' in open).toEqual(true);
+
+        delete (open as unknown as Record<string, unknown>)['email'];
+
+        expect(open.has('email')).toEqual(false);
+    });
+
+    test('passes symbol properties straight through', (): void => {
+        const open: Open = new Open();
+        const marker: symbol = Symbol('marker');
+
+        (open as unknown as Record<symbol, unknown>)[marker] = 'internal';
+
+        expect((open as unknown as Record<symbol, unknown>)[marker]).toEqual('internal');
+        expect(marker in open).toEqual(true);
+
+        delete (open as unknown as Record<symbol, unknown>)[marker];
+
+        expect(marker in open).toEqual(false);
+        expect(Symbol('absent') in open).toEqual(false);
+    });
+
+    test('writes and deletes class members via reflection, not attributes', (): void => {
+        const open: Open = new Open();
+
+        (open as unknown as Record<string, unknown>)['sync'] = 'shadowed';
+
+        expect((open as unknown as Record<string, unknown>)['sync']).toEqual('shadowed');
+        expect(open.has('sync')).toEqual(false);
+
+        delete (open as unknown as Record<string, unknown>)['sync'];
+
+        expect(typeof (open as unknown as Record<string, unknown>)['sync']).toEqual('function');
+    });
+});
+
+describe('Model.fillable', (): void => {
+    test('returns the declared fillable keys', (): void => {
+        expect(new User().fillable()).toEqual(['first_name', 'last_name', 'email', 'age', 'meta', 'created_at']);
+    });
+});
+
+describe('Model.guarded', (): void => {
+    test('returns the declared guarded keys', (): void => {
+        expect(new User().guarded()).toEqual([]);
+    });
+});
+
+describe('Model.hidden', (): void => {
+    test('returns the declared hidden keys', (): void => {
+        expect(new Account({}).hidden()).toEqual(['email']);
+    });
+});
+
+describe('Model.defaults', (): void => {
+    test('returns the declared default values', (): void => {
+        expect(new User().defaults()).toEqual({ age: 18 });
+    });
+});
