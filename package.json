@@ -1,5 +1,5 @@
 {
-  "name": "ts-laravel-model",
+  "name": "@bjnstnkvc/model",
   "version": "0.1.0",
   "description": "TypeScript port of Laravel Eloquent's data-modeling layer.",
   "type": "module",
@@ -22,7 +22,23 @@
     "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BJNSTNKVC/js-model.git"
+  },
+  "keywords": [
+    "ts",
+    "typescript",
+    "laravel",
+    "eloquent",
+    "model"
+  ],
+  "author": "Bojan Stankovic <dev.bojan.stankovic@gmail.com>",
   "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/BJNSTNKVC/js-model/issues"
+  },
+  "homepage": "https://github.com/BJNSTNKVC/js-model#readme",
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@vitest/coverage-v8": "^1.6.0",
