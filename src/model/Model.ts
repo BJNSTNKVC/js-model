@@ -1,5 +1,4 @@
 import type { Attribute } from './Attribute';
-import { MassAssignmentError } from './MassAssignmentError';
 import type { AttributeBag, Attributes, Cast, Casts, CastType, Enum, Key, Related, Relations } from './types';
 
 const KNOWN: readonly string[] = [
@@ -21,11 +20,6 @@ const KNOWN: readonly string[] = [
 
 export abstract class Model<A = AttributeBag> {
     /**
-     * When true, mass assignment of non-fillable keys throws instead of discarding.
-     */
-    static strict: boolean = false;
-
-    /**
      * The raw attribute values keyed by attribute name.
      */
     protected attributes: AttributeBag;
@@ -41,32 +35,14 @@ export abstract class Model<A = AttributeBag> {
     protected memo: Map<string, unknown>;
 
     /**
-     * Attribute keys hidden from serialization at runtime.
-     */
-    protected concealed: Set<string>;
-
-    /**
-     * The runtime serialization whitelist.
-     */
-    protected exposed: Set<string>;
-
-    /**
-     * Virtual keys appended to serialization at runtime.
-     */
-    protected appended: Set<string>;
-
-    /**
      * Create a new model instance.
      */
     constructor(attributes: Partial<A> & AttributeBag = {}) {
         this.attributes = {};
         this.originals = {};
         this.memo = new Map<string, unknown>();
-        this.concealed = new Set<string>(this.hidden());
-        this.exposed = new Set<string>(this.visible());
-        this.appended = new Set<string>(this.appends());
 
-        this.forceFill(this.defaults());
+        this.fill(this.defaults());
         this.sync();
         this.fill(attributes);
 
@@ -74,7 +50,7 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
-     * Create a model from trusted raw data, bypassing guards and mutators, synced clean.
+     * Create a model from trusted raw data, bypassing mutators, synced clean.
      */
     static hydrate<T extends Model<any>>(this: new () => T, attributes: AttributeBag): T {
         const model: T = new this();
@@ -133,33 +109,9 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
-     * Mass assign attributes, honoring the fillable/guarded rules.
+     * Mass assign the given attributes.
      */
     fill(attributes: Partial<A> & AttributeBag): this {
-        const fillable: readonly string[] = this.fillable();
-        const guarded: readonly string[] = this.guarded();
-
-        for (const [key, value] of Object.entries(attributes)) {
-            const allowed: boolean = fillable.length > 0 ? fillable.includes(key) : !guarded.includes(key);
-
-            if (allowed) {
-                this.set(key, value);
-
-                continue;
-            }
-
-            if ((this.constructor as typeof Model).strict) {
-                throw new MassAssignmentError(`Add [${key}] to the fillable list to enable mass assignment on [${this.constructor.name}].`);
-            }
-        }
-
-        return this;
-    }
-
-    /**
-     * Mass assign attributes, bypassing all guarding.
-     */
-    forceFill(attributes: Partial<A> & AttributeBag): this {
         for (const [key, value] of Object.entries(attributes)) {
             this.set(key, value);
         }
@@ -292,17 +244,8 @@ export abstract class Model<A = AttributeBag> {
      */
     toJSON(): AttributeBag<A> {
         const output: AttributeBag = {};
-        const keys: Set<string> = new Set<string>([...Object.keys(this.attributes), ...this.appended]);
 
-        for (const key of keys) {
-            if (this.exposed.size > 0 && !this.exposed.has(key)) {
-                continue;
-            }
-
-            if (this.concealed.has(key)) {
-                continue;
-            }
-
+        for (const key of Object.keys(this.attributes)) {
             output[key] = this.transform(key, this.attributes, this.memo);
         }
 
@@ -338,43 +281,6 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
-     * Hide the given keys from serialization at runtime.
-     */
-    hide(...keys: Key<A>[]): this {
-        for (const key of keys) {
-            this.concealed.add(key);
-        }
-
-        return this;
-    }
-
-    /**
-     * Make the given keys visible in serialization at runtime.
-     */
-    show(...keys: Key<A>[]): this {
-        for (const key of keys) {
-            this.concealed.delete(key);
-
-            if (this.exposed.size > 0) {
-                this.exposed.add(key);
-            }
-        }
-
-        return this;
-    }
-
-    /**
-     * Append the given virtual keys to serialization at runtime.
-     */
-    append(...keys: Key<A>[]): this {
-        for (const key of keys) {
-            this.appended.add(key);
-        }
-
-        return this;
-    }
-
-    /**
      * Get the attributes that should be cast.
      */
     casts(): Casts<A> {
@@ -393,41 +299,6 @@ export abstract class Model<A = AttributeBag> {
      */
     relations(): Relations<A> {
         return {};
-    }
-
-    /**
-     * Get the attribute keys that are mass assignable.
-     */
-    fillable(): (keyof A & string)[] {
-        return [];
-    }
-
-    /**
-     * Get the attribute keys that are guarded from mass assignment.
-     */
-    guarded(): (keyof A & string)[] {
-        return [];
-    }
-
-    /**
-     * Get the attribute keys hidden from serialization.
-     */
-    hidden(): (keyof A & string)[] {
-        return [];
-    }
-
-    /**
-     * Get the serialization whitelist.
-     */
-    visible(): (keyof A & string)[] {
-        return [];
-    }
-
-    /**
-     * Get the virtual keys appended to serialization.
-     */
-    appends(): (keyof A & string)[] {
-        return [];
     }
 
     /**

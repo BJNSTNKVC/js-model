@@ -6,7 +6,6 @@ import {
     type Cast,
     type Casts,
     type Relations,
-    MassAssignmentError,
     Model,
 } from '../../src/main';
 
@@ -49,13 +48,6 @@ class User extends Model<UserAttributes> {
             }),
             email   : Attribute.set<string>((value: string): unknown => value.toLowerCase()),
         };
-    }
-
-    /**
-     * Get the attribute keys that are mass assignable.
-     */
-    override fillable(): (keyof UserAttributes & string)[] {
-        return ['first_name', 'last_name', 'email', 'age', 'meta', 'created_at'];
     }
 
     /**
@@ -124,20 +116,6 @@ class Account extends Model<AccountAttributes> {
             banner: Attribute.get<string>((_value: unknown, attributes: AttributeBag<AccountAttributes>): string => `Hi ${String(attributes['name'])}`),
         };
     }
-
-    /**
-     * Get the attribute keys hidden from serialization.
-     */
-    override hidden(): (keyof AccountAttributes & string)[] {
-        return ['email'];
-    }
-
-    /**
-     * Get the virtual keys appended to serialization.
-     */
-    override appends(): (keyof AccountAttributes & string)[] {
-        return ['banner'];
-    }
 }
 
 interface Account extends AccountAttributes {
@@ -197,26 +175,6 @@ class Person extends Model<PersonAttributes> {
         };
     }
 
-    /**
-     * Get the attribute keys that are mass assignable.
-     */
-    override fillable(): (keyof PersonAttributes & string)[] {
-        return ['first_name', 'last_name', 'email', 'settings', 'created_at'];
-    }
-
-    /**
-     * Get the attribute keys hidden from serialization.
-     */
-    override hidden(): (keyof PersonAttributes & string)[] {
-        return ['email'];
-    }
-
-    /**
-     * Get the virtual keys appended to serialization.
-     */
-    override appends(): (keyof PersonAttributes & string)[] {
-        return ['fullName'];
-    }
 }
 
 interface Person extends PersonAttributes {
@@ -269,13 +227,7 @@ describe('Model.constructor', (): void => {
         expect(new User().raw('age')).toEqual(18);
     });
 
-    test('silently discards non-fillable keys by default', (): void => {
-        const user: User = new User({ id: 99 });
-
-        expect(user.raw('id')).toBeUndefined();
-    });
-
-    test('fills everything when no fillable or guarded lists are declared', (): void => {
+    test('fills every given attribute', (): void => {
         const open: Open = new Open({ anything: 'goes' });
 
         expect(open.raw('anything')).toEqual('goes');
@@ -673,77 +625,25 @@ describe('Model.set', (): void => {
 
         expect(user.get('address')).toEqual('Elm Street');
         expect(user.has('address')).toEqual(true);
-        expect(user.forceFill({ city: 'Copenhagen' }).get('city')).toEqual('Copenhagen');
+        expect(user.fill({ city: 'Copenhagen' }).get('city')).toEqual('Copenhagen');
     });
 });
 
 describe('Model.fill', (): void => {
-    test('lets fillable win when both lists are declared', (): void => {
-        interface BothAttributes {
-            a: number;
-            b: number;
-        }
+    test('mass assigns every given attribute', (): void => {
+        const user: User = new User();
 
-        class Both extends Model<BothAttributes> {
-            /**
-             * Get the attribute keys that are mass assignable.
-             */
-            override fillable(): (keyof BothAttributes & string)[] {
-                return ['a'];
-            }
+        user.fill({ first_name: 'Jane', id: 1 });
 
-            /**
-             * Get the attribute keys that are guarded from mass assignment.
-             */
-            override guarded(): (keyof BothAttributes & string)[] {
-                return ['a', 'b'];
-            }
-        }
-
-        const both: Both = new Both({ a: 1, b: 2 });
-
-        expect(both.raw('a')).toEqual(1);
-        expect(both.raw('b')).toBeUndefined();
+        expect(user.raw('first_name')).toEqual('Jane');
+        expect(user.raw('id')).toEqual(1);
     });
 
-    test('discards guarded keys when only guarded is declared', (): void => {
-        interface SafeAttributes {
-            open: string;
-            locked: string;
-        }
-
-        class Safe extends Model<SafeAttributes> {
-            /**
-             * Get the attribute keys that are guarded from mass assignment.
-             */
-            override guarded(): (keyof SafeAttributes & string)[] {
-                return ['locked'];
-            }
-        }
-
-        const safe: Safe = new Safe({ open: 'yes', locked: 'no' });
-
-        expect(safe.raw('open')).toEqual('yes');
-        expect(safe.raw('locked')).toBeUndefined();
-    });
-
-    test('throws in strict mode instead of discarding', (): void => {
-        Model.strict = true;
-
-        try {
-            expect((): User => new User({ id: 1 })).toThrow(MassAssignmentError);
-        } finally {
-            Model.strict = false;
-        }
-    });
-});
-
-describe('Model.forceFill', (): void => {
-    test('bypasses guarding while still applying casts', (): void => {
+    test('applies casts while filling', (): void => {
         const user: User = new User();
 
         // @ts-expect-error
-        user.forceFill({ id: '7' });
+        user.fill({ id: '7' });
 
         expect(user.get('id')).toEqual(7);
     });
@@ -874,7 +774,7 @@ describe('Model.dirty', (): void => {
 
         item.sync();
         // @ts-expect-error
-        item.forceFill({ price: '5' });
+        item.fill({ price: '5' });
 
         expect(item.dirty('price')).toEqual(true);
     });
@@ -1015,19 +915,13 @@ describe('Model.discard', (): void => {
 });
 
 describe('Model.hydrate', (): void => {
-    test('creates a clean model from trusted raw data, bypassing guards and mutators', (): void => {
+    test('creates a clean model from trusted raw data', (): void => {
         interface LockedAttributes {
             id: number;
             secret: string;
         }
 
         class Locked extends Model<LockedAttributes> {
-            /**
-             * Get the attribute keys that are mass assignable.
-             */
-            override fillable(): (keyof LockedAttributes & string)[] {
-                return ['secret'];
-            }
         }
 
         const locked: Locked = Locked.hydrate({ id: 5, secret: 'raw' });
@@ -1069,54 +963,18 @@ describe('Model.hydrate', (): void => {
 });
 
 describe('Model.toJSON', (): void => {
-    test('applies casts and accessors, appends virtuals, and hides hidden keys', (): void => {
+    test('applies casts and accessors when serializing', (): void => {
         const account: Account = new Account({ name: 'Ana', email: 'a@b.c', age: '30' as unknown as number });
-        const output: AttributeBag = account.toJSON();
 
-        expect(output).toEqual({ name: 'Ana', age: 30, banner: 'Hi Ana' });
-        expect('email' in output).toEqual(false);
+        expect(account.toJSON()).toEqual({ name: 'Ana', email: 'a@b.c', age: 30 });
     });
 
     test('round-trips through JSON.stringify with ISO dates', (): void => {
         const account: Account = new Account({ name: 'Ana', created_at: new Date('2026-08-23T10:00:00.000Z') });
         const parsed: AttributeBag = JSON.parse(JSON.stringify(account)) as AttributeBag;
 
+        expect(parsed['name']).toEqual('Ana');
         expect(parsed['created_at']).toEqual('2026-08-23T10:00:00.000Z');
-        expect(parsed['banner']).toEqual('Hi Ana');
-    });
-
-    test('lets a non-empty visible whitelist win first', (): void => {
-        interface NarrowAttributes {
-            a: number;
-            b: number;
-        }
-
-        class Narrow extends Model<NarrowAttributes> {
-            /**
-             * Get the serialization whitelist.
-             */
-            override visible(): (keyof NarrowAttributes & string)[] {
-                return ['a'];
-            }
-        }
-
-        const narrow: Narrow = new Narrow({ a: 1, b: 2 });
-
-        expect(narrow.toJSON()).toEqual({ a: 1 });
-    });
-
-    test('serializes with hidden and appended keys and ISO dates', (): void => {
-        const person: Person = Person.hydrate({
-            first_name: 'Ana',
-            last_name : 'K',
-            email     : 'a@b.c',
-            created_at: '2026-08-23T10:00:00.000Z',
-        });
-        const parsed: AttributeBag = JSON.parse(JSON.stringify(person)) as AttributeBag;
-
-        expect(parsed['fullName']).toEqual('Ana K');
-        expect(parsed['created_at']).toEqual('2026-08-23T10:00:00.000Z');
-        expect('email' in parsed).toEqual(false);
     });
 });
 
@@ -1133,76 +991,6 @@ describe('Model.except', (): void => {
         const account: Account = new Account({ name: 'Ana', email: 'a@b.c', age: '30' as unknown as number });
 
         expect(account.except('email', 'age')).toEqual({ name: 'Ana' });
-    });
-});
-
-describe('Model.hide', (): void => {
-    test('hides keys from serialization at runtime', (): void => {
-        const account: Account = new Account({ name: 'Ana', email: 'a@b.c' });
-
-        account.hide('name');
-
-        expect(account.toJSON()).toEqual({ banner: 'Hi Ana' });
-    });
-});
-
-describe('Model.show', (): void => {
-    test('reveals hidden keys at runtime', (): void => {
-        const account: Account = new Account({ name: 'Ana', email: 'a@b.c' });
-
-        account.show('email');
-
-        expect(account.toJSON()).toEqual({ name: 'Ana', email: 'a@b.c', banner: 'Hi Ana' });
-    });
-
-    test('adds shown keys to a non-empty whitelist', (): void => {
-        interface ListedAttributes {
-            a: number;
-            b: number;
-        }
-
-        class Listed extends Model<ListedAttributes> {
-            /**
-             * Get the serialization whitelist.
-             */
-            override visible(): (keyof ListedAttributes & string)[] {
-                return ['a'];
-            }
-        }
-
-        const listed: Listed = new Listed({ a: 1, b: 2 });
-
-        listed.show('b');
-
-        expect(listed.toJSON()).toEqual({ a: 1, b: 2 });
-    });
-});
-
-describe('Model.append', (): void => {
-    test('appends virtual keys to serialization at runtime', (): void => {
-        interface BareAttributes {
-            x: number;
-            upper: string;
-        }
-
-        class Bare extends Model<BareAttributes> {
-            /**
-             * Get the accessor and mutator definitions.
-             */
-            override mutators(): Attributes<BareAttributes> {
-                return {
-                    upper: Attribute.get<string>((_value: unknown, attributes: AttributeBag<BareAttributes>): string => String(attributes['x']).toUpperCase()),
-                };
-            }
-        }
-
-        const bare: Bare = new Bare({ x: 1 });
-
-        expect(bare.toJSON()).toEqual({ x: 1 });
-
-        bare.append('upper');
-
-        expect(bare.toJSON()).toEqual({ x: 1, upper: '1' });
     });
 });
 
@@ -1328,24 +1116,6 @@ describe('Model.relations', (): void => {
         const parsed: AttributeBag = JSON.parse(JSON.stringify(blog)) as AttributeBag;
 
         expect(parsed['posts']).toEqual([{ title: 'Hello', published: true }]);
-    });
-});
-
-describe('Model.fillable', (): void => {
-    test('returns the declared fillable keys', (): void => {
-        expect(new User().fillable()).toEqual(['first_name', 'last_name', 'email', 'age', 'meta', 'created_at']);
-    });
-});
-
-describe('Model.guarded', (): void => {
-    test('returns the declared guarded keys', (): void => {
-        expect(new User().guarded()).toEqual([]);
-    });
-});
-
-describe('Model.hidden', (): void => {
-    test('returns the declared hidden keys', (): void => {
-        expect(new Account({}).hidden()).toEqual(['email']);
     });
 });
 

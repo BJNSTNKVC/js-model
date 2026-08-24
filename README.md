@@ -1,6 +1,6 @@
 # Model
 
-TypeScript equivalent of the [Laravel Eloquent](https://laravel.com/docs/12.x/eloquent) data modeling layer: attributes, casts, accessors and mutators, mass assignment, dirty tracking and serialization, without the database.
+TypeScript equivalent of the [Laravel Eloquent](https://laravel.com/docs/12.x/eloquent) data modeling layer: attributes, casts, accessors and mutators, dirty tracking and serialization, without the database.
 
 ## Installation & setup
 
@@ -60,20 +60,6 @@ class User extends Model<UserAttributes> {
     }
 
     /**
-     * Get the attribute keys that are mass assignable.
-     */
-    override fillable(): (keyof UserAttributes & string)[] {
-        return ['first_name', 'last_name', 'email', 'age'];
-    }
-
-    /**
-     * Get the attribute keys hidden from serialization.
-     */
-    override hidden(): (keyof UserAttributes & string)[] {
-        return ['email'];
-    }
-
-    /**
      * Get the default attribute values.
      */
     override defaults(): Partial<UserAttributes> {
@@ -128,81 +114,6 @@ An unknown cast type throws a `TypeError` on both read and write. Values of `nul
 #### mutators()
 
 The `mutators` method returns the accessor and mutator definitions for the model. See [Accessors & Mutators](#accessors--mutators).
-
-#### fillable()
-
-The `fillable` method returns the attribute keys that are mass assignable. When the list is empty and no keys are guarded, every attribute is fillable:
-
-```ts
-class User extends Model<UserAttributes> {
-    /**
-     * Get the attribute keys that are mass assignable.
-     */
-    override fillable(): (keyof UserAttributes & string)[] {
-        return ['first_name', 'last_name', 'email'];
-    }
-}
-```
-
-#### guarded()
-
-The `guarded` method returns the attribute keys that are not mass assignable. When both lists are declared, the fillable list wins:
-
-```ts
-class User extends Model<UserAttributes> {
-    /**
-     * Get the attribute keys that are guarded from mass assignment.
-     */
-    override guarded(): (keyof UserAttributes & string)[] {
-        return ['id'];
-    }
-}
-```
-
-#### hidden()
-
-The `hidden` method returns the attribute keys excluded from serialization:
-
-```ts
-class User extends Model<UserAttributes> {
-    /**
-     * Get the attribute keys hidden from serialization.
-     */
-    override hidden(): (keyof UserAttributes & string)[] {
-        return ['email'];
-    }
-}
-```
-
-#### visible()
-
-The `visible` method returns the serialization whitelist. When the list is not empty, only these keys are serialized:
-
-```ts
-class User extends Model<UserAttributes> {
-    /**
-     * Get the serialization whitelist.
-     */
-    override visible(): (keyof UserAttributes & string)[] {
-        return ['first_name', 'last_name'];
-    }
-}
-```
-
-#### appends()
-
-The `appends` method returns the virtual keys appended to serialization:
-
-```ts
-class User extends Model<UserAttributes> {
-    /**
-     * Get the virtual keys appended to serialization.
-     */
-    override appends(): (keyof UserAttributes & string)[] {
-        return ['fullName'];
-    }
-}
-```
 
 #### defaults()
 
@@ -476,18 +387,10 @@ user.set('address', 'Main St');  // key outside the interface
 
 #### fill()
 
-The `fill` method mass assigns attributes while honoring the fillable and guarded rules. Non fillable keys are silently discarded unless strict mode is enabled:
+The `fill` method mass assigns the given attributes:
 
 ```ts
-user.fill({ first_name: 'Jane', id: 1 }); // id is discarded
-```
-
-#### forceFill()
-
-The `forceFill` method mass assigns attributes while bypassing all guarding:
-
-```ts
-user.forceFill({ id: 1 });
+user.fill({ first_name: 'Jane', id: 1 });
 ```
 
 #### forget()
@@ -498,19 +401,11 @@ The `forget` method removes an attribute from raw storage:
 user.forget('address');
 ```
 
-### Mass Assignment
-
-By default every attribute is fillable. Once `fillable` or `guarded` lists are declared, offending keys are silently discarded during `fill`, matching Eloquent. Enabling strict mode throws a `MassAssignmentError` instead:
-
-```ts
-Model.strict = true;
-
-new User({ id: 1 }); // throws MassAssignmentError
-```
+### Hydration
 
 #### Model.hydrate()
 
-The static `hydrate` method creates a model from trusted raw data, bypassing guards and mutators. A hydrated model is synced clean:
+The static `hydrate` method creates a model from trusted raw data, bypassing mutators. A hydrated model is synced clean:
 
 ```ts
 const user: User = User.hydrate({ id: 7, first_name: 'John' });
@@ -601,34 +496,10 @@ copy.dirty(); // true
 
 #### toJSON()
 
-The `toJSON` method serializes the model to a plain object, applying casts, accessors, appends and visibility rules. Since `toJSON` is the native serialization hook, `JSON.stringify` works out of the box:
+The `toJSON` method serializes the model to a plain object, applying casts and accessors. Since `toJSON` is the native serialization hook, `JSON.stringify` works out of the box:
 
 ```ts
 JSON.stringify(user); // '{"first_name":"John","fullName":"John Doe"}'
-```
-
-#### hide()
-
-The `hide` method hides the given keys from serialization at runtime:
-
-```ts
-user.hide('first_name');
-```
-
-#### show()
-
-The `show` method reveals hidden keys at runtime:
-
-```ts
-user.show('email');
-```
-
-#### append()
-
-The `append` method appends the given virtual keys to serialization at runtime:
-
-```ts
-user.append('fullName');
 ```
 
 ## Notes

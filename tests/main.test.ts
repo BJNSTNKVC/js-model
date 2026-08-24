@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { Attribute, MassAssignmentError, Model } from '../src/main';
+import { Attribute, Model } from '../src/main';
 
 describe('Main', (): void => {
     test('exports Model class', (): void => {
@@ -12,16 +12,10 @@ describe('Main', (): void => {
         expect(typeof Attribute).toBe('function');
     });
 
-    test('exports MassAssignmentError class', (): void => {
-        expect(MassAssignmentError).toBeDefined();
-        expect(typeof MassAssignmentError).toBe('function');
-    });
-
     test('exports individual modules', async (): Promise<void> => {
         const module = await import('../src/main');
 
         expect(module.Model).toBe(Model);
         expect(module.Attribute).toBe(Attribute);
-        expect(module.MassAssignmentError).toBe(MassAssignmentError);
     });
 });
