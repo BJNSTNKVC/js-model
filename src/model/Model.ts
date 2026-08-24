@@ -1,5 +1,5 @@
 import type { Attribute } from './Attribute';
-import type { AttributeBag, Attributes, Cast, Casts, CastType, Enum, Key, Related, Relations } from './types';
+import type { AttributeBag, Attributes, Caster, Casts, CastType, Enum, Key, Related, Relations } from './types';
 
 const KNOWN: readonly string[] = [
     'int',
@@ -77,7 +77,6 @@ export abstract class Model<A = AttributeBag> {
     set(key: string, value: unknown): this {
         this.memo.delete(key);
 
-        // Indexing the mapped config types by a plain string needs a widened view.
         const definition: Attribute | undefined = (this.mutators() as Record<string, Attribute | undefined>)[key];
 
         if (definition !== undefined && definition.set !== undefined) {
@@ -95,7 +94,7 @@ export abstract class Model<A = AttributeBag> {
             return this;
         }
 
-        const cast: CastType | Cast | Enum | undefined = (this.casts() as Record<string, CastType | Cast | Enum | undefined>)[key];
+        const cast: CastType | Caster | Enum | undefined = (this.casts() as Record<string, CastType | Caster | Enum | undefined>)[key];
 
         if (cast !== undefined) {
             this.attributes[key] = this.normalize(cast, value, key, this.attributes);
@@ -189,10 +188,10 @@ export abstract class Model<A = AttributeBag> {
      * Get the original (last-synced) attributes with casts applied, or one of them.
      */
     original(): AttributeBag<A>;
-    original(key: Key<A>): unknown;
-    original(key?: string): unknown {
+    original(key: Key<A>, fallback?: unknown): unknown;
+    original(key?: string, fallback?: unknown): unknown {
         if (key !== undefined) {
-            return this.transform(key, this.originals);
+            return Object.hasOwn(this.originals, key) ? this.transform(key, this.originals) : fallback;
         }
 
         const output: AttributeBag = {};
@@ -208,9 +207,13 @@ export abstract class Model<A = AttributeBag> {
      * Get a copy of the raw original attributes, or a single raw original value.
      */
     rawOriginal(): AttributeBag<A>;
-    rawOriginal(key: Key<A>): unknown;
-    rawOriginal(key?: string): unknown {
-        return key === undefined ? { ...this.originals } : this.originals[key];
+    rawOriginal(key: Key<A>, fallback?: unknown): unknown;
+    rawOriginal(key?: string, fallback?: unknown): unknown {
+        if (key === undefined) {
+            return { ...this.originals };
+        }
+
+        return Object.hasOwn(this.originals, key) ? this.originals[key] : fallback;
     }
 
     /**
@@ -240,7 +243,7 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
-     * Serialize the model to a plain object, applying casts, accessors, appends, and visibility.
+     * Serialize the model to a plain object, applying casts and accessors.
      */
     toJSON(): AttributeBag<A> {
         const output: AttributeBag = {};
@@ -344,7 +347,7 @@ export abstract class Model<A = AttributeBag> {
             return related;
         }
 
-        const cast: CastType | Cast | Enum | undefined = (this.casts() as Record<string, CastType | Cast | Enum | undefined>)[key];
+        const cast: CastType | Caster | Enum | undefined = (this.casts() as Record<string, CastType | Caster | Enum | undefined>)[key];
 
         if (cast !== undefined) {
             if (memo !== undefined && memo.has(key)) {
@@ -371,7 +374,9 @@ export abstract class Model<A = AttributeBag> {
             return value;
         }
 
-        // An attribute bag is always a plain object, so an array value can only mean a one to many relation.
+        // An attribute bag is always a plain object, which means an array value
+        // can only ever represent a one to many relation. The cardinality may
+        // therefore be inferred from the data instead of the declaration.
         if (Array.isArray(value)) {
             return value.map((entry: unknown): unknown => this.relate(relation, entry));
         }
@@ -382,7 +387,6 @@ export abstract class Model<A = AttributeBag> {
 
         const model: Model<any> = new relation();
 
-        // Mirrors hydrate(): full raw replacement, synced clean.
         model.attributes = { ...(value as AttributeBag) };
 
         return model.sync();
@@ -391,9 +395,9 @@ export abstract class Model<A = AttributeBag> {
     /**
      * Cast a raw value for reading.
      */
-    protected cast(cast: CastType | Cast | Enum, value: unknown, key: string, attributes: AttributeBag): unknown {
-        if (this.caster(cast)) {
-            return cast.get(value, key, attributes);
+    protected cast(cast: CastType | Caster | Enum, value: unknown, key: string, attributes: AttributeBag): unknown {
+        if (typeof cast === 'function') {
+            return new cast().get(value, key, attributes);
         }
 
         if (typeof cast === 'object') {
@@ -441,9 +445,9 @@ export abstract class Model<A = AttributeBag> {
     /**
      * Normalize a value into its raw storage form for writing.
      */
-    protected normalize(cast: CastType | Cast | Enum, value: unknown, key: string, attributes: AttributeBag): unknown {
-        if (this.caster(cast)) {
-            return cast.set(value, key, attributes);
+    protected normalize(cast: CastType | Caster | Enum, value: unknown, key: string, attributes: AttributeBag): unknown {
+        if (typeof cast === 'function') {
+            return new cast().set(value, key, attributes);
         }
 
         if (typeof cast === 'object') {
@@ -468,13 +472,6 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
-     * Determine whether a cast definition is a custom cast instance.
-     */
-    protected caster(cast: CastType | Cast | Enum): cast is Cast {
-        return typeof cast === 'object' && typeof (cast as Cast).get === 'function';
-    }
-
-    /**
      * Validate a raw value against the given enum definition.
      */
     protected enumerate(definition: Enum, value: unknown, key: string): string | number | null | undefined {
@@ -482,7 +479,9 @@ export abstract class Model<A = AttributeBag> {
             return value;
         }
 
-        // Numeric enums carry reverse mappings; only non-numeric keys hold the actual values.
+        // Numeric enums compile with reverse mappings from each value back to its
+        // name, so only the non numeric keys of the enum object may be used to
+        // collect the actual set of values an attribute is allowed to hold.
         const values: (string | number)[] = Object.keys(definition)
             .filter((name: string): boolean => Number.isNaN(Number(name)))
             .map((name: string): string | number => definition[name] as string | number);
@@ -701,7 +700,9 @@ export abstract class Model<A = AttributeBag> {
                 }
 
                 if (Object.hasOwn(target.attributes, property)) {
-                    // Spread reads values through the get trap; the raw value here only backs the descriptor.
+                    // Enumeration reads values through the get trap, so the descriptor
+                    // only carries the raw value as a placeholder. Computing casts during
+                    // a simple key listing could throw, which a listing never should.
                     return { value: target.raw(property), writable: true, enumerable: true, configurable: true };
                 }
 

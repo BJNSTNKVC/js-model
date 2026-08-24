@@ -24,7 +24,9 @@ export type CastType =
 
 export type Enum = Record<string, string | number>;
 
-export type Casts<A> = { [K in keyof A & string]?: CastType | Cast | Enum };
+export type Caster = new () => Cast;
+
+export type Casts<A> = { [K in keyof A & string]?: CastType | Caster | Enum };
 
 export interface Cast<T = unknown> {
     /**

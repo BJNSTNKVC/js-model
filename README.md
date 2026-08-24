@@ -234,7 +234,7 @@ Note that a cached accessor reading sibling attributes is only invalidated when 
 
 ### Custom Casts
 
-A custom cast is any object implementing the `Cast` interface, mirroring Eloquent's `CastsAttributes`. Pass an instance in the cast map:
+A custom cast is any class implementing the `Cast` interface, mirroring Eloquent's `CastsAttributes`. Pass the class itself in the cast map:
 
 ```ts
 import { Model, type Cast, type AttributeBag, type Casts } from '@bjnstnkvc/model';
@@ -260,7 +260,7 @@ class User extends Model<UserAttributes> {
      * Get the attributes that should be cast.
      */
     override casts(): Casts<UserAttributes> {
-        return { settings: new Settings() };
+        return { settings: Settings };
     }
 }
 ```
@@ -445,15 +445,16 @@ user.changes(); // { first_name: 'Jane' }
 
 #### original()
 
-The `original` method returns the last synced attributes with casts applied, or a single one of them:
+The `original` method returns the last synced attributes with casts applied, or a single one of them. An optional fallback is returned when the key was never synced:
 
 ```ts
-user.original('first_name'); // 'John'
+user.original('first_name');      // 'John'
+user.original('missing', 'none'); // 'none'
 ```
 
 #### rawOriginal()
 
-The `rawOriginal` method returns a copy of the last synced attributes without casts, or a single one of them:
+The `rawOriginal` method returns a copy of the last synced attributes without casts, or a single one of them. An optional fallback is returned when the key was never synced:
 
 ```ts
 user.rawOriginal('created_at'); // '2026-08-23T10:00:00.000Z'
