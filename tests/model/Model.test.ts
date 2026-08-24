@@ -5,6 +5,7 @@ import {
     type Attributes,
     type Cast,
     type Casts,
+    type Relations,
     MassAssignmentError,
     Model,
 } from '../../src/main';
@@ -219,6 +220,44 @@ class Person extends Model<PersonAttributes> {
 }
 
 interface Person extends PersonAttributes {
+}
+
+interface PostAttributes {
+    title: string;
+    published: boolean;
+}
+
+class Post extends Model<PostAttributes> {
+    /**
+     * Get the attributes that should be cast.
+     */
+    override casts(): Casts<PostAttributes> {
+        return { published: 'bool' };
+    }
+}
+
+interface Post extends PostAttributes {
+}
+
+interface BlogAttributes {
+    name: string;
+    featured: Post;
+    posts: Post[];
+}
+
+class Blog extends Model<BlogAttributes> {
+    /**
+     * Get the related model definitions.
+     */
+    override relations(): Relations<BlogAttributes> {
+        return {
+            featured: Post,
+            posts   : Post,
+        };
+    }
+}
+
+interface Blog extends BlogAttributes {
 }
 
 describe('Model.constructor', (): void => {
@@ -1251,6 +1290,44 @@ describe('Model.proxy', (): void => {
         expect(Object.getOwnPropertyDescriptor(open, 'missing')).toBeUndefined();
         expect(Object.getOwnPropertyDescriptor(open, 'sync')).toBeUndefined();
         expect(Object.getOwnPropertyDescriptor(open, marker)?.value).toEqual('internal');
+    });
+});
+
+describe('Model.relations', (): void => {
+    test('hydrates related models from raw data', (): void => {
+        const blog: Blog = Blog.hydrate({ name: 'Dev', featured: { title: 'Pinned', published: 1 }, posts: [{ title: 'Hello', published: 0 }] });
+
+        expect(blog.featured).toBeInstanceOf(Post);
+        expect(blog.featured.published).toEqual(true);
+        expect(blog.posts[0]).toBeInstanceOf(Post);
+        expect(blog.posts[0]?.title).toEqual('Hello');
+        expect(blog.posts[0]?.published).toEqual(false);
+        expect(blog.posts[0]?.dirty()).toEqual(false);
+        expect(blog.posts).toBe(blog.posts);
+    });
+
+    test('passes model instances and empty values through', (): void => {
+        const post: Post = Post.hydrate({ title: 'Hello' });
+        const blog: Blog = new Blog();
+
+        blog.posts = [post];
+
+        expect(blog.posts[0]).toBe(post);
+        expect(blog.get('featured')).toBeUndefined();
+        expect(Blog.hydrate({ featured: null }).get('featured')).toBeNull();
+    });
+
+    test('hydrates related models from the original state', (): void => {
+        const blog: Blog = Blog.hydrate({ posts: [{ title: 'Hello' }] });
+
+        expect((blog.original('posts') as Post[])[0]).toBeInstanceOf(Post);
+    });
+
+    test('serializes related models recursively', (): void => {
+        const blog: Blog = Blog.hydrate({ name: 'Dev', posts: [{ title: 'Hello', published: 1 }] });
+        const parsed: AttributeBag = JSON.parse(JSON.stringify(blog)) as AttributeBag;
+
+        expect(parsed['posts']).toEqual([{ title: 'Hello', published: true }]);
     });
 });
 

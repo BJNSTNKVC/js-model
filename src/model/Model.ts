@@ -1,6 +1,6 @@
 import type { Attribute } from './Attribute';
 import { MassAssignmentError } from './MassAssignmentError';
-import type { AttributeBag, Attributes, Cast, Casts, CastType, Enum, Key } from './types';
+import type { AttributeBag, Attributes, Cast, Casts, CastType, Enum, Key, Related, Relations } from './types';
 
 const KNOWN: readonly string[] = [
     'int',
@@ -389,6 +389,13 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
+     * Get the related model definitions.
+     */
+    relations(): Relations<A> {
+        return {};
+    }
+
+    /**
      * Get the attribute keys that are mass assignable.
      */
     fillable(): (keyof A & string)[] {
@@ -450,6 +457,22 @@ export abstract class Model<A = AttributeBag> {
             return computed;
         }
 
+        const relation: Related | undefined = (this.relations() as Record<string, Related | undefined>)[key];
+
+        if (relation !== undefined) {
+            if (memo !== undefined && memo.has(key)) {
+                return memo.get(key);
+            }
+
+            const related: unknown = this.relate(relation, attributes[key]);
+
+            if (memo !== undefined && related !== null && related !== undefined) {
+                memo.set(key, related);
+            }
+
+            return related;
+        }
+
         const cast: CastType | Cast | Enum | undefined = (this.casts() as Record<string, CastType | Cast | Enum | undefined>)[key];
 
         if (cast !== undefined) {
@@ -467,6 +490,31 @@ export abstract class Model<A = AttributeBag> {
         }
 
         return attributes[key];
+    }
+
+    /**
+     * Hydrate a raw value into its related model or models.
+     */
+    protected relate(relation: Related, value: unknown): unknown {
+        if (value === null || value === undefined) {
+            return value;
+        }
+
+        // An attribute bag is always a plain object, so an array value can only mean a one to many relation.
+        if (Array.isArray(value)) {
+            return value.map((entry: unknown): unknown => this.relate(relation, entry));
+        }
+
+        if (value instanceof relation) {
+            return value;
+        }
+
+        const model: Model<any> = new relation();
+
+        // Mirrors hydrate(): full raw replacement, synced clean.
+        model.attributes = { ...(value as AttributeBag) };
+
+        return model.sync();
     }
 
     /**

@@ -273,6 +273,40 @@ server.status; // Status.Active
 server.status = 'archived'; // throws TypeError
 ```
 
+### Relationships
+
+Since there is no database, a relationship is simply an attribute holding another model or an array of models. Related models are declared through the `relations` method by passing the model class itself. The cardinality follows the data, so a raw array hydrates into an array of models and a raw object into a single one:
+
+```ts
+interface UserAttributes {
+    name: string;
+    profile: Profile;
+    posts: Post[];
+}
+
+class User extends Model<UserAttributes> {
+    override relations(): Relations<UserAttributes> {
+        return {
+            profile: Profile,
+            posts  : Post,
+        };
+    }
+}
+```
+
+Raw data hydrates into clean model instances on read, while values that are already instances pass through untouched. Related models serialize recursively through `toJSON`:
+
+```ts
+const user: User = User.hydrate({ name: 'John', posts: [{ title: 'Hello' }] });
+
+user.posts[0];        // Post instance
+JSON.stringify(user); // '{"name":"John","posts":[{"title":"Hello"}]}'
+
+user.posts = [Post.hydrate({ title: 'Manual' })];
+```
+
+Note that a related model is held by reference, so editing it in place is not visible to the parent model's `dirty` method. Replacing the value is tracked as usual.
+
 ### Retrieving Attributes
 
 #### get()
