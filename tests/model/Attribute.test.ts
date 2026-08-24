@@ -44,3 +44,14 @@ describe('Attribute.set', (): void => {
         expectTypeOf<Attributes<TypedAttributes>['age']>().toEqualTypeOf<Attribute<number> | undefined>();
     });
 });
+
+describe('Attribute.cache', (): void => {
+    test('marks the definition as cached', (): void => {
+        const accessor: (value: unknown, attributes: AttributeBag) => string = (value: unknown): string => String(value);
+        const definition: Attribute<string> = Attribute.get(accessor);
+
+        expect(definition.cached).toEqual(false);
+        expect(definition.cache()).toBe(definition);
+        expect(definition.cached).toEqual(true);
+    });
+});

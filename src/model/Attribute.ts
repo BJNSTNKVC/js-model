@@ -12,6 +12,11 @@ export class Attribute<T = unknown> {
     set?: (value: T, attributes: AttributeBag) => unknown;
 
     /**
+     * Whether the accessor result is memoized between reads.
+     */
+    cached: boolean = false;
+
+    /**
      * Create a new attribute definition.
      */
     constructor(get?: (value: unknown, attributes: AttributeBag) => T, set?: (value: T, attributes: AttributeBag) => unknown) {
@@ -38,5 +43,14 @@ export class Attribute<T = unknown> {
      */
     static set<T>(set: (value: T, attributes: AttributeBag) => unknown): Attribute<T> {
         return new Attribute<T>(undefined, set);
+    }
+
+    /**
+     * Memoize the accessor result until the attribute is written again.
+     */
+    cache(): this {
+        this.cached = true;
+
+        return this;
     }
 }

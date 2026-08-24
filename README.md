@@ -216,6 +216,16 @@ fullName: Attribute.make<string>({
 })
 ```
 
+#### cache()
+
+The `cache` method memoizes the accessor result until the attribute is written again. Accessors are otherwise recomputed on every read:
+
+```ts
+banner: Attribute.get<string>((value: unknown, attributes: AttributeBag): string => `Hi ${attributes['name']}`).cache()
+```
+
+Note that a cached accessor reading sibling attributes is only invalidated when its own key is written.
+
 ### Custom Casts
 
 A custom cast is any object implementing the `Cast` interface, mirroring Eloquent's `CastsAttributes`. Pass an instance in the cast map:
@@ -238,6 +248,29 @@ class User extends Model<UserAttributes> {
         return { settings: new Settings() };
     }
 }
+```
+
+### Enum Casting
+
+Enums may be cast by passing the enum itself in the cast map. Values are validated against the enum on both read and write, and an invalid value throws a `TypeError`. Numeric enums are supported, including their reverse mappings, which are never treated as values:
+
+```ts
+enum Status {
+    Active   = 'active',
+    Inactive = 'inactive',
+}
+
+class Server extends Model<ServerAttributes> {
+    override casts(): Casts<ServerAttributes> {
+        return { status: Status };
+    }
+}
+
+const server: Server = Server.hydrate({ status: 'active' });
+
+server.status; // Status.Active
+
+server.status = 'archived'; // throws TypeError
 ```
 
 ### Retrieving Attributes
@@ -379,6 +412,14 @@ The `original` method returns the last synced attributes with casts applied, or 
 user.original('first_name'); // 'John'
 ```
 
+#### rawOriginal()
+
+The `rawOriginal` method returns a copy of the last synced attributes without casts, or a single one of them:
+
+```ts
+user.rawOriginal('created_at'); // '2026-08-23T10:00:00.000Z'
+```
+
 #### sync()
 
 The `sync` method snapshots the current raw attributes as the original state:
@@ -398,6 +439,18 @@ user.set('first_name', 'Jane');
 user.discard();
 
 user.first_name; // 'John'
+```
+
+### Replicating Models
+
+#### replicate()
+
+The `replicate` method copies the model into a fresh, unsaved instance. The replica carries a deep copy of the raw attributes and is marked as dirty. Keys passed to the method are excluded from the copy:
+
+```ts
+const copy: User = user.replicate('id');
+
+copy.dirty(); // true
 ```
 
 ### Serialization
@@ -438,4 +491,4 @@ user.append('fullName');
 
 Class members shadow same named attributes when accessed as properties. An attribute literally named `fill` is still stored and remains reachable through `user.get('fill')` and `user.set('fill', value)`.
 
-Spreading a model or calling `Object.keys` on it operates on the instance, not on the attributes. Use `raw()` for a plain copy of the raw attributes or `toJSON()` for the serialized form.
+Spreading a model or calling `Object.keys` on it enumerates the attribute keys, with values read through the usual cast and accessor pipeline. Attributes shadowed by a class member are skipped during enumeration, since property access cannot reach them either.

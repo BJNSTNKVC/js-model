@@ -21,7 +21,9 @@ export type CastType =
     | 'timestamp'
     | `decimal:${number}`;
 
-export type Casts<A> = { [K in keyof A & string]?: CastType | Cast };
+export type Enum = Record<string, string | number>;
+
+export type Casts<A> = { [K in keyof A & string]?: CastType | Cast | Enum };
 
 export interface Cast<T = unknown> {
     /**

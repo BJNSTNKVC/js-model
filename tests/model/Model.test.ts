@@ -249,6 +249,16 @@ describe('Model.casts', (): void => {
         set: (value: string): unknown => value.toLowerCase(),
     };
 
+    enum Status {
+        Active   = 'active',
+        Inactive = 'inactive',
+    }
+
+    enum Level {
+        Low  = 0,
+        High = 1,
+    }
+
     class Caster extends Model {
         /**
          * Get the attributes that should be cast.
@@ -272,6 +282,8 @@ describe('Model.casts', (): void => {
                 decimal  : 'decimal:2',
                 zero     : 'decimal:0',
                 custom   : upper,
+                status   : Status,
+                level    : Level,
                 broken   : 'nonsense' as never,
                 precision: 'decimal:nope' as never,
                 negative : 'decimal:-1' as never,
@@ -389,6 +401,19 @@ describe('Model.casts', (): void => {
         expect(person.settings).toBe(person.settings);
     });
 
+    test('validates values against enum casts', (): void => {
+        const caster: Caster = new Caster();
+
+        expect(caster.set('status', Status.Active).get('status')).toEqual(Status.Active);
+        expect(caster.set('status', null).raw('status')).toBeNull();
+        expect(Caster.hydrate({ status: null }).get('status')).toBeNull();
+        expect(Caster.hydrate({ status: 'inactive' }).get('status')).toEqual(Status.Inactive);
+        expect(Caster.hydrate({ level: 1 }).get('level')).toEqual(Level.High);
+        expect((): unknown => Caster.hydrate({ status: 'archived' }).get('status')).toThrow('Invalid enum value [archived] for attribute [status].');
+        expect((): unknown => caster.set('status', 'archived')).toThrow(TypeError);
+        expect((): unknown => caster.set('level', 'High')).toThrow(TypeError);
+    });
+
     test('passes null and undefined through untouched on write', (): void => {
         const caster: Caster = new Caster();
 
@@ -453,6 +478,38 @@ describe('Model.get', (): void => {
         const user: User = new User({ first_name: 'Ana', last_name: 'Kovač' });
 
         expect(user.get('fullName')).toEqual('Ana Kovač');
+    });
+
+    test('memoizes cached accessor results until the attribute is written', (): void => {
+        let calls: number = 0;
+
+        class Cached extends Model {
+            /**
+             * Get the accessor and mutator definitions.
+             */
+            override mutators(): Attributes<AttributeBag> {
+                return {
+                    greeting: Attribute.get<unknown>((value: unknown): string => {
+                        calls++;
+
+                        return `Hi ${value}`;
+                    }).cache(),
+                };
+            }
+        }
+
+        const cached: Cached = Cached.hydrate({ greeting: 'John' });
+
+        expect(cached.get('greeting')).toEqual('Hi John');
+        expect(cached.get('greeting')).toEqual('Hi John');
+        expect(calls).toEqual(1);
+
+        cached.set('greeting', 'Jane');
+
+        expect(cached.get('greeting')).toEqual('Hi Jane');
+        expect(calls).toEqual(2);
+        expect(cached.original('greeting')).toEqual('Hi John');
+        expect(calls).toEqual(3);
     });
 });
 
@@ -684,6 +741,10 @@ describe('Model.has', (): void => {
 
         expect(user.has('email')).toEqual(true);
     });
+
+    test('does not report Object.prototype names as present', (): void => {
+        expect(new Open().has('toString')).toEqual(false);
+    });
 });
 
 describe('Model.forget', (): void => {
@@ -808,6 +869,10 @@ describe('Model.dirty', (): void => {
 
         expect(holder.dirty('tags')).toEqual(false);
     });
+
+    test('does not report Object.prototype names as dirty', (): void => {
+        expect(new Open().dirty('toString')).toEqual(false);
+    });
 });
 
 describe('Model.changes', (): void => {
@@ -834,6 +899,48 @@ describe('Model.original', (): void => {
 
         expect(bag['name']).toEqual('Pen');
         expect((bag['created_at'] as Date).toISOString()).toEqual('2026-01-01T00:00:00.000Z');
+    });
+});
+
+describe('Model.rawOriginal', (): void => {
+    test('returns the raw original attributes without casts', (): void => {
+        const item: Item = Item.hydrate({ name: 'Pen', created_at: '2026-01-01T00:00:00.000Z' });
+
+        item.set('created_at', new Date('2026-06-06T00:00:00.000Z'));
+
+        expect(item.rawOriginal('created_at')).toEqual('2026-01-01T00:00:00.000Z');
+
+        const bag: AttributeBag = item.rawOriginal();
+
+        expect(bag['name']).toEqual('Pen');
+
+        bag['name'] = 'mutated';
+
+        expect(item.rawOriginal('name')).toEqual('Pen');
+    });
+});
+
+describe('Model.replicate', (): void => {
+    test('copies the attributes into a fresh dirty instance', (): void => {
+        const item: Item = Item.hydrate({ name: 'Pen', price: 5, meta: { tags: ['a'] } });
+        const copy: Item = item.replicate();
+
+        expect(copy).toBeInstanceOf(Item);
+        expect(copy).not.toBe(item);
+        expect(copy.raw()).toEqual(item.raw());
+        expect(copy.dirty()).toEqual(true);
+
+        (copy.raw('meta') as { tags: string[] }).tags.push('b');
+
+        expect((item.raw('meta') as { tags: string[] }).tags).toEqual(['a']);
+    });
+
+    test('excludes the given keys from the replica', (): void => {
+        const item: Item = Item.hydrate({ name: 'Pen', price: 5 });
+        const copy: Item = item.replicate('price');
+
+        expect(copy.has('price')).toEqual(false);
+        expect(copy.raw('name')).toEqual('Pen');
     });
 });
 
@@ -1124,6 +1231,26 @@ describe('Model.proxy', (): void => {
         delete (open as unknown as Record<string, unknown>)['sync'];
 
         expect(typeof (open as unknown as Record<string, unknown>)['sync']).toEqual('function');
+    });
+
+    test('enumerates attribute keys for Object.keys and spread', (): void => {
+        const user: User = User.hydrate({ first_name: 'John', age: '30' });
+
+        expect(Object.keys(user)).toEqual(['first_name', 'age']);
+        expect({ ...user }).toEqual({ first_name: 'John', age: 30 });
+    });
+
+    test('hides internals and shadowed keys from enumeration', (): void => {
+        const open: Open = new Open({ fill: 'attribute-value' });
+        const marker: symbol = Symbol('marker');
+
+        (open as unknown as Record<symbol, unknown>)[marker] = 'internal';
+
+        expect(Object.keys(open)).toEqual([]); // fill is shadowed by the method and skipped
+        expect({ ...open }).toEqual({});
+        expect(Object.getOwnPropertyDescriptor(open, 'missing')).toBeUndefined();
+        expect(Object.getOwnPropertyDescriptor(open, 'sync')).toBeUndefined();
+        expect(Object.getOwnPropertyDescriptor(open, marker)?.value).toEqual('internal');
     });
 });
 

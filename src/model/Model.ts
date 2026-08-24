@@ -1,6 +1,6 @@
 import type { Attribute } from './Attribute';
 import { MassAssignmentError } from './MassAssignmentError';
-import type { AttributeBag, Attributes, Cast, Casts, CastType, Key } from './types';
+import type { AttributeBag, Attributes, Cast, Casts, CastType, Enum, Key } from './types';
 
 const KNOWN: readonly string[] = [
     'int',
@@ -119,7 +119,7 @@ export abstract class Model<A = AttributeBag> {
             return this;
         }
 
-        const cast: CastType | Cast | undefined = (this.casts() as Record<string, CastType | Cast | undefined>)[key];
+        const cast: CastType | Cast | Enum | undefined = (this.casts() as Record<string, CastType | Cast | Enum | undefined>)[key];
 
         if (cast !== undefined) {
             this.attributes[key] = this.normalize(cast, value, key, this.attributes);
@@ -182,7 +182,7 @@ export abstract class Model<A = AttributeBag> {
     has(key: string): boolean {
         const definition: Attribute | undefined = (this.mutators() as Record<string, Attribute | undefined>)[key];
 
-        return key in this.attributes || (definition !== undefined && definition.get !== undefined);
+        return Object.hasOwn(this.attributes, key) || (definition !== undefined && definition.get !== undefined);
     }
 
     /**
@@ -215,7 +215,7 @@ export abstract class Model<A = AttributeBag> {
             return Object.keys(changed).length > 0;
         }
 
-        return keys.some((key: string): boolean => key in changed);
+        return keys.some((key: string): boolean => Object.hasOwn(changed, key));
     }
 
     /**
@@ -225,7 +225,7 @@ export abstract class Model<A = AttributeBag> {
         const changed: AttributeBag = {};
 
         for (const [key, value] of Object.entries(this.attributes)) {
-            if (!(key in this.originals) || !this.equivalent(value, this.originals[key])) {
+            if (!Object.hasOwn(this.originals, key) || !this.equivalent(value, this.originals[key])) {
                 changed[key] = value;
             }
         }
@@ -250,6 +250,31 @@ export abstract class Model<A = AttributeBag> {
         }
 
         return output;
+    }
+
+    /**
+     * Get a copy of the raw original attributes, or a single raw original value.
+     */
+    rawOriginal(): AttributeBag<A>;
+    rawOriginal(key: Key<A>): unknown;
+    rawOriginal(key?: string): unknown {
+        return key === undefined ? { ...this.originals } : this.originals[key];
+    }
+
+    /**
+     * Copy the model into a fresh unsaved instance, excluding the given keys.
+     */
+    replicate(...except: Key<A>[]): this {
+        const model: this = new (this.constructor as new () => this)();
+        const attributes: AttributeBag = this.snapshot(this.attributes) as AttributeBag;
+
+        for (const key of except) {
+            delete attributes[key];
+        }
+
+        model.attributes = attributes;
+
+        return model;
     }
 
     /**
@@ -350,16 +375,82 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
+     * Get the attributes that should be cast.
+     */
+    casts(): Casts<A> {
+        return {};
+    }
+
+    /**
+     * Get the accessor and mutator definitions.
+     */
+    mutators(): Attributes<A> {
+        return {};
+    }
+
+    /**
+     * Get the attribute keys that are mass assignable.
+     */
+    fillable(): (keyof A & string)[] {
+        return [];
+    }
+
+    /**
+     * Get the attribute keys that are guarded from mass assignment.
+     */
+    guarded(): (keyof A & string)[] {
+        return [];
+    }
+
+    /**
+     * Get the attribute keys hidden from serialization.
+     */
+    hidden(): (keyof A & string)[] {
+        return [];
+    }
+
+    /**
+     * Get the serialization whitelist.
+     */
+    visible(): (keyof A & string)[] {
+        return [];
+    }
+
+    /**
+     * Get the virtual keys appended to serialization.
+     */
+    appends(): (keyof A & string)[] {
+        return [];
+    }
+
+    /**
+     * Get the default attribute values.
+     */
+    defaults(): Partial<A> {
+        return {};
+    }
+
+    /**
      * Apply the accessor/cast get pipeline for one key against the given raw bag.
      */
     protected transform(key: string, attributes: AttributeBag, memo?: Map<string, unknown>): unknown {
         const definition: Attribute | undefined = (this.mutators() as Record<string, Attribute | undefined>)[key];
 
         if (definition !== undefined && definition.get !== undefined) {
-            return definition.get(attributes[key], attributes);
+            if (definition.cached && memo !== undefined && memo.has(key)) {
+                return memo.get(key);
+            }
+
+            const computed: unknown = definition.get(attributes[key], attributes);
+
+            if (definition.cached && memo !== undefined) {
+                memo.set(key, computed);
+            }
+
+            return computed;
         }
 
-        const cast: CastType | Cast | undefined = (this.casts() as Record<string, CastType | Cast | undefined>)[key];
+        const cast: CastType | Cast | Enum | undefined = (this.casts() as Record<string, CastType | Cast | Enum | undefined>)[key];
 
         if (cast !== undefined) {
             if (memo !== undefined && memo.has(key)) {
@@ -381,9 +472,13 @@ export abstract class Model<A = AttributeBag> {
     /**
      * Cast a raw value for reading.
      */
-    protected cast(cast: CastType | Cast, value: unknown, key: string, attributes: AttributeBag): unknown {
-        if (typeof cast === 'object') {
+    protected cast(cast: CastType | Cast | Enum, value: unknown, key: string, attributes: AttributeBag): unknown {
+        if (this.caster(cast)) {
             return cast.get(value, key, attributes);
+        }
+
+        if (typeof cast === 'object') {
+            return this.enumerate(cast, value, key);
         }
 
         if (value === null || value === undefined) {
@@ -427,9 +522,13 @@ export abstract class Model<A = AttributeBag> {
     /**
      * Normalize a value into its raw storage form for writing.
      */
-    protected normalize(cast: CastType | Cast, value: unknown, key: string, attributes: AttributeBag): unknown {
-        if (typeof cast === 'object') {
+    protected normalize(cast: CastType | Cast | Enum, value: unknown, key: string, attributes: AttributeBag): unknown {
+        if (this.caster(cast)) {
             return cast.set(value, key, attributes);
+        }
+
+        if (typeof cast === 'object') {
+            return this.enumerate(cast, value, key);
         }
 
         this.validate(cast, key);
@@ -447,6 +546,33 @@ export abstract class Model<A = AttributeBag> {
             default:
                 return value;
         }
+    }
+
+    /**
+     * Determine whether a cast definition is a custom cast instance.
+     */
+    protected caster(cast: CastType | Cast | Enum): cast is Cast {
+        return typeof cast === 'object' && typeof (cast as Cast).get === 'function';
+    }
+
+    /**
+     * Validate a raw value against the given enum definition.
+     */
+    protected enumerate(definition: Enum, value: unknown, key: string): string | number | null | undefined {
+        if (value === null || value === undefined) {
+            return value;
+        }
+
+        // Numeric enums carry reverse mappings; only non-numeric keys hold the actual values.
+        const values: (string | number)[] = Object.keys(definition)
+            .filter((name: string): boolean => Number.isNaN(Number(name)))
+            .map((name: string): string | number => definition[name] as string | number);
+
+        if (values.includes(value as string | number)) {
+            return value as string | number;
+        }
+
+        throw new TypeError(`Invalid enum value [${String(value)}] for attribute [${key}].`);
     }
 
     /**
@@ -639,62 +765,29 @@ export abstract class Model<A = AttributeBag> {
 
                 return true;
             },
+
+            /**
+             * Enumerate attribute keys for Object.keys, spread, and for-in loops.
+             */
+            ownKeys(target: Model<A>): (string | symbol)[] {
+                return Object.keys(target.attributes);
+            },
+
+            /**
+             * Describe attributes as enumerable properties during enumeration.
+             */
+            getOwnPropertyDescriptor(target: Model<A>, property: string | symbol): PropertyDescriptor | undefined {
+                if (typeof property === 'symbol' || property in target) {
+                    return Reflect.getOwnPropertyDescriptor(target, property);
+                }
+
+                if (Object.hasOwn(target.attributes, property)) {
+                    // Spread reads values through the get trap; the raw value here only backs the descriptor.
+                    return { value: target.raw(property), writable: true, enumerable: true, configurable: true };
+                }
+
+                return undefined;
+            },
         };
-    }
-
-    /**
-     * Get the attributes that should be cast.
-     */
-    casts(): Casts<A> {
-        return {};
-    }
-
-    /**
-     * Get the accessor and mutator definitions.
-     */
-    mutators(): Attributes<A> {
-        return {};
-    }
-
-    /**
-     * Get the attribute keys that are mass assignable.
-     */
-    fillable(): (keyof A & string)[] {
-        return [];
-    }
-
-    /**
-     * Get the attribute keys that are guarded from mass assignment.
-     */
-    guarded(): (keyof A & string)[] {
-        return [];
-    }
-
-    /**
-     * Get the attribute keys hidden from serialization.
-     */
-    hidden(): (keyof A & string)[] {
-        return [];
-    }
-
-    /**
-     * Get the serialization whitelist.
-     */
-    visible(): (keyof A & string)[] {
-        return [];
-    }
-
-    /**
-     * Get the virtual keys appended to serialization.
-     */
-    appends(): (keyof A & string)[] {
-        return [];
-    }
-
-    /**
-     * Get the default attribute values.
-     */
-    defaults(): Partial<A> {
-        return {};
     }
 }
