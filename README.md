@@ -38,6 +38,9 @@ interface UserAttributes {
 }
 
 class User extends Model<UserAttributes> {
+    /**
+     * Get the attributes that should be cast.
+     */
     override casts(): Casts<UserAttributes> {
         return {
             id        : 'int',
@@ -46,6 +49,9 @@ class User extends Model<UserAttributes> {
         };
     }
 
+    /**
+     * Get the accessor and mutator definitions.
+     */
     override mutators(): Attributes<UserAttributes> {
         return {
             fullName: Attribute.get<string>((value: unknown, attributes: AttributeBag<UserAttributes>): string => `${attributes['first_name']} ${attributes['last_name']}`),
@@ -53,14 +59,23 @@ class User extends Model<UserAttributes> {
         };
     }
 
+    /**
+     * Get the attribute keys that are mass assignable.
+     */
     override fillable(): (keyof UserAttributes & string)[] {
         return ['first_name', 'last_name', 'email', 'age'];
     }
 
+    /**
+     * Get the attribute keys hidden from serialization.
+     */
     override hidden(): (keyof UserAttributes & string)[] {
         return ['email'];
     }
 
+    /**
+     * Get the default attribute values.
+     */
     override defaults(): Partial<UserAttributes> {
         return { age: 18 };
     }
@@ -93,13 +108,18 @@ Configuration is declared through methods rather than properties, since class fi
 The `casts` method returns a map of attributes that should be cast when read. The following cast types are available: `int`, `integer`, `float`, `double`, `number`, `string`, `bool`, `boolean`, `json`, `array`, `object`, `date`, `datetime`, `timestamp` and `decimal:<places>`:
 
 ```ts
-override casts(): Casts<UserAttributes> {
-    return {
-        age       : 'int',
-        options   : 'json',
-        salary    : 'decimal:2',
-        created_at: 'datetime',
-    };
+class User extends Model<UserAttributes> {
+    /**
+     * Get the attributes that should be cast.
+     */
+    override casts(): Casts<UserAttributes> {
+        return {
+            age       : 'int',
+            options   : 'json',
+            salary    : 'decimal:2',
+            created_at: 'datetime',
+        };
+    }
 }
 ```
 
@@ -114,8 +134,13 @@ The `mutators` method returns the accessor and mutator definitions for the model
 The `fillable` method returns the attribute keys that are mass assignable. When the list is empty and no keys are guarded, every attribute is fillable:
 
 ```ts
-override fillable(): (keyof UserAttributes & string)[] {
-    return ['first_name', 'last_name', 'email'];
+class User extends Model<UserAttributes> {
+    /**
+     * Get the attribute keys that are mass assignable.
+     */
+    override fillable(): (keyof UserAttributes & string)[] {
+        return ['first_name', 'last_name', 'email'];
+    }
 }
 ```
 
@@ -124,8 +149,13 @@ override fillable(): (keyof UserAttributes & string)[] {
 The `guarded` method returns the attribute keys that are not mass assignable. When both lists are declared, the fillable list wins:
 
 ```ts
-override guarded(): (keyof UserAttributes & string)[] {
-    return ['id'];
+class User extends Model<UserAttributes> {
+    /**
+     * Get the attribute keys that are guarded from mass assignment.
+     */
+    override guarded(): (keyof UserAttributes & string)[] {
+        return ['id'];
+    }
 }
 ```
 
@@ -134,8 +164,13 @@ override guarded(): (keyof UserAttributes & string)[] {
 The `hidden` method returns the attribute keys excluded from serialization:
 
 ```ts
-override hidden(): (keyof UserAttributes & string)[] {
-    return ['email'];
+class User extends Model<UserAttributes> {
+    /**
+     * Get the attribute keys hidden from serialization.
+     */
+    override hidden(): (keyof UserAttributes & string)[] {
+        return ['email'];
+    }
 }
 ```
 
@@ -144,8 +179,13 @@ override hidden(): (keyof UserAttributes & string)[] {
 The `visible` method returns the serialization whitelist. When the list is not empty, only these keys are serialized:
 
 ```ts
-override visible(): (keyof UserAttributes & string)[] {
-    return ['first_name', 'last_name'];
+class User extends Model<UserAttributes> {
+    /**
+     * Get the serialization whitelist.
+     */
+    override visible(): (keyof UserAttributes & string)[] {
+        return ['first_name', 'last_name'];
+    }
 }
 ```
 
@@ -154,8 +194,13 @@ override visible(): (keyof UserAttributes & string)[] {
 The `appends` method returns the virtual keys appended to serialization:
 
 ```ts
-override appends(): (keyof UserAttributes & string)[] {
-    return ['fullName'];
+class User extends Model<UserAttributes> {
+    /**
+     * Get the virtual keys appended to serialization.
+     */
+    override appends(): (keyof UserAttributes & string)[] {
+        return ['fullName'];
+    }
 }
 ```
 
@@ -164,8 +209,13 @@ override appends(): (keyof UserAttributes & string)[] {
 The `defaults` method returns the initial attribute values. Defaults are applied before construction attributes and do not mark the model as dirty:
 
 ```ts
-override defaults(): Partial<UserAttributes> {
-    return { age: 18 };
+class User extends Model<UserAttributes> {
+    /**
+     * Get the default attribute values.
+     */
+    override defaults(): Partial<UserAttributes> {
+        return { age: 18 };
+    }
 }
 ```
 
@@ -178,7 +228,16 @@ Accessors and mutators are declared through the `Attribute` class, mirroring `Il
 The `Attribute.get` method defines an accessor, a transformation applied when the attribute is read. The callback receives the raw value and the raw attribute bag:
 
 ```ts
-fullName: Attribute.get<string>((value: unknown, attributes: AttributeBag<UserAttributes>): string => `${attributes['first_name']} ${attributes['last_name']}`)
+class User extends Model<UserAttributes> {
+    /**
+     * Get the accessor and mutator definitions.
+     */
+    override mutators(): Attributes<UserAttributes> {
+        return {
+            fullName: Attribute.get<string>((value: unknown, attributes: AttributeBag<UserAttributes>): string => `${attributes['first_name']} ${attributes['last_name']}`),
+        };
+    }
+}
 ```
 
 An accessor wins over a cast declared for the same key and receives the raw, uncast value.
@@ -188,17 +247,35 @@ An accessor wins over a cast declared for the same key and receives the raw, unc
 The `Attribute.set` method defines a mutator, a transformation applied when the attribute is written. The returned value is stored as the raw attribute:
 
 ```ts
-email: Attribute.set<string>((value: string): unknown => value.toLowerCase())
+class User extends Model<UserAttributes> {
+    /**
+     * Get the accessor and mutator definitions.
+     */
+    override mutators(): Attributes<UserAttributes> {
+        return {
+            email: Attribute.set<string>((value: string): unknown => value.toLowerCase()),
+        };
+    }
+}
 ```
 
 A mutator returning a plain object writes multiple raw attributes at once. To store a plain object as a single value, wrap it under its own key:
 
 ```ts
-fullName: Attribute.set<string>((value: string): unknown => {
-    const [first, last]: string[] = value.split(' ');
+class User extends Model<UserAttributes> {
+    /**
+     * Get the accessor and mutator definitions.
+     */
+    override mutators(): Attributes<UserAttributes> {
+        return {
+            fullName: Attribute.set<string>((value: string): unknown => {
+                const [first, last]: string[] = value.split(' ');
 
-    return { first_name: first, last_name: last };
-})
+                return { first_name: first, last_name: last };
+            }),
+        };
+    }
+}
 ```
 
 #### Attribute.make()
@@ -206,14 +283,23 @@ fullName: Attribute.set<string>((value: string): unknown => {
 The `Attribute.make` method defines an accessor and a mutator in a single definition:
 
 ```ts
-fullName: Attribute.make<string>({
-    get: (value: unknown, attributes: AttributeBag<UserAttributes>): string => `${attributes['first_name']} ${attributes['last_name']}`,
-    set: (value: string): unknown => {
-        const [first, last]: string[] = value.split(' ');
+class User extends Model<UserAttributes> {
+    /**
+     * Get the accessor and mutator definitions.
+     */
+    override mutators(): Attributes<UserAttributes> {
+        return {
+            fullName: Attribute.make<string>({
+                get: (value: unknown, attributes: AttributeBag<UserAttributes>): string => `${attributes['first_name']} ${attributes['last_name']}`,
+                set: (value: string): unknown => {
+                    const [first, last]: string[] = value.split(' ');
 
-        return { first_name: first, last_name: last };
-    },
-})
+                    return { first_name: first, last_name: last };
+                },
+            }),
+        };
+    }
+}
 ```
 
 #### cache()
@@ -221,7 +307,16 @@ fullName: Attribute.make<string>({
 The `cache` method memoizes the accessor result until the attribute is written again. Accessors are otherwise recomputed on every read:
 
 ```ts
-banner: Attribute.get<string>((value: unknown, attributes: AttributeBag): string => `Hi ${attributes['name']}`).cache()
+class User extends Model<UserAttributes> {
+    /**
+     * Get the accessor and mutator definitions.
+     */
+    override mutators(): Attributes<UserAttributes> {
+        return {
+            banner: Attribute.get<string>((value: unknown, attributes: AttributeBag<UserAttributes>): string => `Hi ${attributes['name']}`).cache(),
+        };
+    }
+}
 ```
 
 Note that a cached accessor reading sibling attributes is only invalidated when its own key is written.
@@ -234,16 +329,25 @@ A custom cast is any object implementing the `Cast` interface, mirroring Eloquen
 import { Model, type Cast, type AttributeBag, type Casts } from '@bjnstnkvc/model';
 
 class Settings implements Cast<{ theme: string }> {
+    /**
+     * Freeze the raw settings object on read.
+     */
     get(value: unknown, key: string, attributes: AttributeBag): { theme: string } {
         return Object.freeze({ ...(value as { theme: string }) });
     }
 
+    /**
+     * Store the settings object as given.
+     */
     set(value: { theme: string }, key: string, attributes: AttributeBag): unknown {
         return value;
     }
 }
 
 class User extends Model<UserAttributes> {
+    /**
+     * Get the attributes that should be cast.
+     */
     override casts(): Casts<UserAttributes> {
         return { settings: new Settings() };
     }
@@ -261,6 +365,9 @@ enum Status {
 }
 
 class Server extends Model<ServerAttributes> {
+    /**
+     * Get the attributes that should be cast.
+     */
     override casts(): Casts<ServerAttributes> {
         return { status: Status };
     }
@@ -285,6 +392,9 @@ interface UserAttributes {
 }
 
 class User extends Model<UserAttributes> {
+    /**
+     * Get the related model definitions.
+     */
     override relations(): Relations<UserAttributes> {
         return {
             profile: Profile,
