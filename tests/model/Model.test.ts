@@ -176,7 +176,7 @@ class Person extends Model<PersonAttributes> {
     override casts(): Casts<PersonAttributes> {
         return {
             id        : 'int',
-            settings  : new Frozen(),
+            settings  : Frozen,
             created_at: 'datetime',
         };
     }
@@ -283,10 +283,21 @@ describe('Model.constructor', (): void => {
 });
 
 describe('Model.casts', (): void => {
-    const upper: Cast<string> = {
-        get: (value: unknown): string => String(value).toUpperCase(),
-        set: (value: string): unknown => value.toLowerCase(),
-    };
+    class Upper implements Cast<string> {
+        /**
+         * Uppercase the raw value on read.
+         */
+        get(value: unknown): string {
+            return String(value).toUpperCase();
+        }
+
+        /**
+         * Lowercase the value for storage.
+         */
+        set(value: string): unknown {
+            return value.toLowerCase();
+        }
+    }
 
     enum Status {
         Active   = 'active',
@@ -320,7 +331,7 @@ describe('Model.casts', (): void => {
                 timestamp: 'timestamp',
                 decimal  : 'decimal:2',
                 zero     : 'decimal:0',
-                custom   : upper,
+                custom   : Upper,
                 status   : Status,
                 level    : Level,
                 broken   : 'nonsense' as never,
@@ -427,7 +438,7 @@ describe('Model.casts', (): void => {
         expect((): unknown => Caster.hydrate({ broken: null }).get('broken')).toThrow(TypeError);
     });
 
-    test('delegates reads and writes to custom cast instances', (): void => {
+    test('delegates reads and writes to custom cast classes', (): void => {
         expect(Caster.hydrate({ custom: 'abc' }).get('custom')).toEqual('ABC');
         expect(new Caster().set('custom', 'ABC').raw('custom')).toEqual('abc');
     });
@@ -939,6 +950,13 @@ describe('Model.original', (): void => {
         expect(bag['name']).toEqual('Pen');
         expect((bag['created_at'] as Date).toISOString()).toEqual('2026-01-01T00:00:00.000Z');
     });
+
+    test('returns the fallback when the key was never synced', (): void => {
+        const item: Item = Item.hydrate({ name: 'Pen' });
+
+        expect(item.original('price', 100)).toEqual(100);
+        expect(item.original('price')).toBeUndefined();
+    });
 });
 
 describe('Model.rawOriginal', (): void => {
@@ -956,6 +974,7 @@ describe('Model.rawOriginal', (): void => {
         bag['name'] = 'mutated';
 
         expect(item.rawOriginal('name')).toEqual('Pen');
+        expect(item.rawOriginal('price', 100)).toEqual(100);
     });
 });
 
@@ -1285,7 +1304,7 @@ describe('Model.proxy', (): void => {
 
         (open as unknown as Record<symbol, unknown>)[marker] = 'internal';
 
-        expect(Object.keys(open)).toEqual([]); // fill is shadowed by the method and skipped
+        expect(Object.keys(open)).toEqual([]);
         expect({ ...open }).toEqual({});
         expect(Object.getOwnPropertyDescriptor(open, 'missing')).toBeUndefined();
         expect(Object.getOwnPropertyDescriptor(open, 'sync')).toBeUndefined();
