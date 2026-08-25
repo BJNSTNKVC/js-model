@@ -66,9 +66,6 @@ class User extends Model<UserAttributes> {
     }
 }
 
-interface User extends UserAttributes {
-}
-
 class Open extends Model {
 }
 
@@ -90,9 +87,6 @@ class Item extends Model<ItemAttributes> {
             created_at: 'datetime',
         };
     }
-}
-
-interface Item extends ItemAttributes {
 }
 
 interface AccountAttributes {
@@ -138,9 +132,6 @@ class Account extends Model<AccountAttributes> {
     override appends(): (keyof AccountAttributes & string)[] {
         return ['banner'];
     }
-}
-
-interface Account extends AccountAttributes {
 }
 
 interface PersonAttributes {
@@ -219,9 +210,6 @@ class Person extends Model<PersonAttributes> {
     }
 }
 
-interface Person extends PersonAttributes {
-}
-
 interface PostAttributes {
     title: string;
     published: boolean;
@@ -234,9 +222,6 @@ class Post extends Model<PostAttributes> {
     override casts(): Casts<PostAttributes> {
         return { published: 'bool' };
     }
-}
-
-interface Post extends PostAttributes {
 }
 
 interface BlogAttributes {
@@ -255,9 +240,6 @@ class Blog extends Model<BlogAttributes> {
             posts   : Post,
         };
     }
-}
-
-interface Blog extends BlogAttributes {
 }
 
 describe('Model.constructor', (): void => {

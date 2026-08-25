@@ -19,7 +19,7 @@ const KNOWN: readonly string[] = [
     'timestamp',
 ];
 
-export abstract class Model<A = AttributeBag> {
+export abstract class BaseModel<A = AttributeBag> {
     /**
      * When true, mass assignment of non-fillable keys throws instead of discarding.
      */
@@ -88,9 +88,9 @@ export abstract class Model<A = AttributeBag> {
     /**
      * Create models from trusted raw data, bypassing guards and mutators, synced clean.
      */
-    static hydrate<T extends Model<any>>(this: new () => T, attributes: AttributeBag): T;
-    static hydrate<T extends Model<any>>(this: new () => T, attributes: AttributeBag[]): T[];
-    static hydrate<T extends Model<any>>(this: new () => T, attributes: AttributeBag | AttributeBag[]): T | T[] {
+    static hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag): T;
+    static hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag[]): T[];
+    static hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag | AttributeBag[]): T | T[] {
         const hydrated = (entry: AttributeBag): T => {
             const model: T = new this();
 
@@ -165,7 +165,7 @@ export abstract class Model<A = AttributeBag> {
                 continue;
             }
 
-            if ((this.constructor as typeof Model).strict) {
+            if ((this.constructor as typeof BaseModel).strict) {
                 throw new MassAssignmentError(`Add [${key}] to the fillable list to enable mass assignment on [${this.constructor.name}].`);
             }
         }
@@ -279,7 +279,7 @@ export abstract class Model<A = AttributeBag> {
     /**
      * Determine whether another model has the same type and equivalent raw attributes.
      */
-    is(model: Model<any> | null | undefined): boolean {
+    is(model: BaseModel<any> | null | undefined): boolean {
         if (model === null || model === undefined || model.constructor !== this.constructor) {
             return false;
         }
@@ -543,7 +543,7 @@ export abstract class Model<A = AttributeBag> {
             return value;
         }
 
-        const model: Model<any> = new relation();
+        const model: BaseModel<any> = new relation();
 
         model.attributes = { ...(value as AttributeBag) };
 
@@ -799,12 +799,12 @@ export abstract class Model<A = AttributeBag> {
     /**
      * Create the proxy handler that routes unknown properties to attribute access.
      */
-    protected proxy(): ProxyHandler<Model<A>> {
+    protected proxy(): ProxyHandler<BaseModel<A>> {
         return {
             /**
              * Route reads of unknown properties through the model's attribute getter.
              */
-            get(target: Model<A>, property: string | symbol, receiver: unknown): unknown {
+            get(target: BaseModel<A>, property: string | symbol, receiver: unknown): unknown {
                 if (typeof property === 'symbol' || property in target) {
                     return Reflect.get(target, property, receiver);
                 }
@@ -815,7 +815,7 @@ export abstract class Model<A = AttributeBag> {
             /**
              * Route writes of unknown properties through the model's attribute setter.
              */
-            set(target: Model<A>, property: string | symbol, value: unknown, receiver: unknown): boolean {
+            set(target: BaseModel<A>, property: string | symbol, value: unknown, receiver: unknown): boolean {
                 if (typeof property === 'symbol' || property in target) {
                     return Reflect.set(target, property, value, receiver);
                 }
@@ -828,7 +828,7 @@ export abstract class Model<A = AttributeBag> {
             /**
              * Report attribute presence for the `in` operator.
              */
-            has(target: Model<A>, property: string | symbol): boolean {
+            has(target: BaseModel<A>, property: string | symbol): boolean {
                 if (typeof property === 'symbol') {
                     return property in target;
                 }
@@ -843,7 +843,7 @@ export abstract class Model<A = AttributeBag> {
             /**
              * Remove an attribute when an unknown property is deleted.
              */
-            deleteProperty(target: Model<A>, property: string | symbol): boolean {
+            deleteProperty(target: BaseModel<A>, property: string | symbol): boolean {
                 if (typeof property === 'symbol' || property in target) {
                     return Reflect.deleteProperty(target, property);
                 }
@@ -856,14 +856,14 @@ export abstract class Model<A = AttributeBag> {
             /**
              * Enumerate attribute keys for Object.keys, spread, and for-in loops.
              */
-            ownKeys(target: Model<A>): (string | symbol)[] {
+            ownKeys(target: BaseModel<A>): (string | symbol)[] {
                 return Object.keys(target.attributes);
             },
 
             /**
              * Describe attributes as enumerable properties during enumeration.
              */
-            getOwnPropertyDescriptor(target: Model<A>, property: string | symbol): PropertyDescriptor | undefined {
+            getOwnPropertyDescriptor(target: BaseModel<A>, property: string | symbol): PropertyDescriptor | undefined {
                 if (typeof property === 'symbol' || property in target) {
                     return Reflect.getOwnPropertyDescriptor(target, property);
                 }
@@ -880,3 +880,21 @@ export abstract class Model<A = AttributeBag> {
         };
     }
 }
+
+export type Model<A = AttributeBag> = BaseModel<A> & A;
+
+// The abstract class is published through an abstract construct signature that
+// intersects every instance with its attribute definition, which is what gives
+// a subclass typed attribute properties without declaring an interface merge.
+export const Model = BaseModel as unknown as (abstract new <A = AttributeBag>(attributes?: Partial<A> & AttributeBag) => Model<A>) & {
+    /**
+     * When true, mass assignment of non-fillable keys throws instead of discarding.
+     */
+    strict: boolean;
+
+    /**
+     * Create models from trusted raw data, bypassing guards and mutators, synced clean.
+     */
+    hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag): T;
+    hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag[]): T[];
+};
