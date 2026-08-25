@@ -938,9 +938,8 @@ describe('Model.changes', (): void => {
 
 describe('Model.original', (): void => {
     test('returns cast-applied originals', (): void => {
-        const item: Item = new Item({ created_at: new Date('2026-01-01T00:00:00.000Z'), name: 'Pen' });
+        const item: Item = Item.hydrate({ created_at: '2026-01-01T00:00:00.000Z', name: 'Pen' });
 
-        item.sync();
         item.set('created_at', new Date('2026-06-06T00:00:00.000Z'));
 
         expect((item.original('created_at') as Date).toISOString()).toEqual('2026-01-01T00:00:00.000Z');
@@ -956,25 +955,6 @@ describe('Model.original', (): void => {
 
         expect(item.original('price', 100)).toEqual(100);
         expect(item.original('price')).toBeUndefined();
-    });
-});
-
-describe('Model.rawOriginal', (): void => {
-    test('returns the raw original attributes without casts', (): void => {
-        const item: Item = Item.hydrate({ name: 'Pen', created_at: '2026-01-01T00:00:00.000Z' });
-
-        item.set('created_at', new Date('2026-06-06T00:00:00.000Z'));
-
-        expect(item.rawOriginal('created_at')).toEqual('2026-01-01T00:00:00.000Z');
-
-        const bag: AttributeBag = item.rawOriginal();
-
-        expect(bag['name']).toEqual('Pen');
-
-        bag['name'] = 'mutated';
-
-        expect(item.rawOriginal('name')).toEqual('Pen');
-        expect(item.rawOriginal('price', 100)).toEqual(100);
     });
 });
 

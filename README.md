@@ -557,14 +557,6 @@ user.original('first_name');      // 'John'
 user.original('missing', 'none'); // 'none'
 ```
 
-#### rawOriginal()
-
-The `rawOriginal` method returns a copy of the last synced attributes without casts, or a single one of them. An optional fallback is returned when the key was never synced:
-
-```ts
-user.rawOriginal('created_at'); // '2026-08-23T10:00:00.000Z'
-```
-
 #### sync()
 
 The `sync` method snapshots the current raw attributes as the original state:
