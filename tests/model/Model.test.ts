@@ -1116,6 +1116,15 @@ describe('Model.hydrate', (): void => {
         expect(locked.dirty()).toEqual(false);
     });
 
+    test('hydrates an array of raw rows into an array of models', (): void => {
+        const items: Item[] = Item.hydrate([{ name: 'Pen' }, { name: 'Pad' }]);
+
+        expect(items.length).toEqual(2);
+        expect(items[0]?.get('name')).toEqual('Pen');
+        expect(items[1]?.get('name')).toEqual('Pad');
+        expect(items[1]?.dirty()).toEqual(false);
+    });
+
     test('replaces defaults entirely, mirroring newFromBuilder', (): void => {
         interface StampedAttributes {
             kind: string;

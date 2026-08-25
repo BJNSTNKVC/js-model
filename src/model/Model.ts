@@ -86,14 +86,20 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
-     * Create a model from trusted raw data, bypassing guards and mutators, synced clean.
+     * Create models from trusted raw data, bypassing guards and mutators, synced clean.
      */
-    static hydrate<T extends Model<any>>(this: new () => T, attributes: AttributeBag): T {
-        const model: T = new this();
+    static hydrate<T extends Model<any>>(this: new () => T, attributes: AttributeBag): T;
+    static hydrate<T extends Model<any>>(this: new () => T, attributes: AttributeBag[]): T[];
+    static hydrate<T extends Model<any>>(this: new () => T, attributes: AttributeBag | AttributeBag[]): T | T[] {
+        const hydrated = (entry: AttributeBag): T => {
+            const model: T = new this();
 
-        model.attributes = { ...attributes };
+            model.attributes = { ...entry };
 
-        return model.sync();
+            return model.sync();
+        };
+
+        return Array.isArray(attributes) ? attributes.map(hydrated) : hydrated(attributes);
     }
 
     /**

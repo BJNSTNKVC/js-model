@@ -520,6 +520,15 @@ const user: User = User.hydrate({ id: 7, first_name: 'John' });
 user.dirty(); // false
 ```
 
+The method also accepts an array of raw rows, returning an array of models:
+
+```ts
+const users: User[] = User.hydrate([
+    { id: 7, first_name: 'John' },
+    { id: 8, first_name: 'Jane' },
+]);
+```
+
 Attributes created through the constructor, on the other hand, are marked as dirty:
 
 ```ts
