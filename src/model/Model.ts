@@ -1,6 +1,6 @@
 import type { Attribute } from './Attribute';
 import { MassAssignmentError } from './MassAssignmentError';
-import type { AttributeBag, Attributes, Caster, Casts, CastType, Enum, Key, Related, Relations } from './types';
+import type { AttributeBag, Attributes, Cast, Caster, Casts, CastType, Enum, Key, Related, Relations } from './types';
 
 const KNOWN: readonly string[] = [
     'int',
@@ -41,6 +41,16 @@ export abstract class Model<A = AttributeBag> {
     protected memo: Map<string, unknown>;
 
     /**
+     * The configuration maps resolved once at construction.
+     */
+    protected resolved: { casts: Casts<A>; mutators: Attributes<A>; relations: Relations<A> };
+
+    /**
+     * Memoized caster instances keyed by their cast class.
+     */
+    protected casters: Map<Caster, Cast>;
+
+    /**
      * Attribute keys hidden from serialization at runtime.
      */
     protected concealed: Set<string>;
@@ -62,6 +72,8 @@ export abstract class Model<A = AttributeBag> {
         this.attributes = {};
         this.originals = {};
         this.memo = new Map<string, unknown>();
+        this.resolved = { casts: this.casts(), mutators: this.mutators(), relations: this.relations() };
+        this.casters = new Map<Caster, Cast>();
         this.concealed = new Set<string>(this.hidden());
         this.exposed = new Set<string>(this.visible());
         this.appended = new Set<string>(this.appends());
@@ -101,7 +113,7 @@ export abstract class Model<A = AttributeBag> {
     set(key: string, value: unknown): this {
         this.memo.delete(key);
 
-        const definition: Attribute | undefined = (this.mutators() as Record<string, Attribute | undefined>)[key];
+        const definition: Attribute | undefined = (this.resolved.mutators as Record<string, Attribute | undefined>)[key];
 
         if (definition !== undefined && definition.set !== undefined) {
             const result: unknown = definition.set(value, this.attributes);
@@ -118,7 +130,7 @@ export abstract class Model<A = AttributeBag> {
             return this;
         }
 
-        const cast: CastType | Caster | Enum | undefined = (this.casts() as Record<string, CastType | Caster | Enum | undefined>)[key];
+        const cast: CastType | Caster | Enum | undefined = (this.resolved.casts as Record<string, CastType | Caster | Enum | undefined>)[key];
 
         if (cast !== undefined) {
             this.attributes[key] = this.normalize(cast, value, key, this.attributes);
@@ -179,7 +191,7 @@ export abstract class Model<A = AttributeBag> {
      * Determine whether an attribute is present, raw or virtual.
      */
     has(key: string): boolean {
-        const definition: Attribute | undefined = (this.mutators() as Record<string, Attribute | undefined>)[key];
+        const definition: Attribute | undefined = (this.resolved.mutators as Record<string, Attribute | undefined>)[key];
 
         return Object.hasOwn(this.attributes, key) || (definition !== undefined && definition.get !== undefined);
     }
@@ -218,6 +230,13 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
+     * Determine whether no (or none of the given) attributes changed since the last sync.
+     */
+    clean(...keys: Key<A>[]): boolean {
+        return !this.dirty(...keys);
+    }
+
+    /**
      * Get the raw attributes that changed since the last sync.
      */
     changes(): AttributeBag<A> {
@@ -249,6 +268,23 @@ export abstract class Model<A = AttributeBag> {
         }
 
         return output;
+    }
+
+    /**
+     * Determine whether another model has the same type and equivalent raw attributes.
+     */
+    is(model: Model<any> | null | undefined): boolean {
+        if (model === null || model === undefined || model.constructor !== this.constructor) {
+            return false;
+        }
+
+        const keys: string[] = Object.keys(this.attributes);
+
+        if (keys.length !== Object.keys(model.attributes).length) {
+            return false;
+        }
+
+        return keys.every((key: string): boolean => Object.hasOwn(model.attributes, key) && this.equivalent(this.attributes[key], model.attributes[key]));
     }
 
     /**
@@ -431,7 +467,7 @@ export abstract class Model<A = AttributeBag> {
      * Apply the accessor/cast get pipeline for one key against the given raw bag.
      */
     protected transform(key: string, attributes: AttributeBag, memo?: Map<string, unknown>): unknown {
-        const definition: Attribute | undefined = (this.mutators() as Record<string, Attribute | undefined>)[key];
+        const definition: Attribute | undefined = (this.resolved.mutators as Record<string, Attribute | undefined>)[key];
 
         if (definition !== undefined && definition.get !== undefined) {
             if (definition.cached && memo !== undefined && memo.has(key)) {
@@ -447,7 +483,7 @@ export abstract class Model<A = AttributeBag> {
             return computed;
         }
 
-        const relation: Related | undefined = (this.relations() as Record<string, Related | undefined>)[key];
+        const relation: Related | undefined = (this.resolved.relations as Record<string, Related | undefined>)[key];
 
         if (relation !== undefined) {
             if (memo !== undefined && memo.has(key)) {
@@ -463,7 +499,7 @@ export abstract class Model<A = AttributeBag> {
             return related;
         }
 
-        const cast: CastType | Caster | Enum | undefined = (this.casts() as Record<string, CastType | Caster | Enum | undefined>)[key];
+        const cast: CastType | Caster | Enum | undefined = (this.resolved.casts as Record<string, CastType | Caster | Enum | undefined>)[key];
 
         if (cast !== undefined) {
             if (memo !== undefined && memo.has(key)) {
@@ -513,7 +549,7 @@ export abstract class Model<A = AttributeBag> {
      */
     protected cast(cast: CastType | Caster | Enum, value: unknown, key: string, attributes: AttributeBag): unknown {
         if (typeof cast === 'function') {
-            return new cast().get(value, key, attributes);
+            return this.caster(cast).get(value, key, attributes);
         }
 
         if (typeof cast === 'object') {
@@ -563,7 +599,7 @@ export abstract class Model<A = AttributeBag> {
      */
     protected normalize(cast: CastType | Caster | Enum, value: unknown, key: string, attributes: AttributeBag): unknown {
         if (typeof cast === 'function') {
-            return new cast().set(value, key, attributes);
+            return this.caster(cast).set(value, key, attributes);
         }
 
         if (typeof cast === 'object') {
@@ -585,6 +621,17 @@ export abstract class Model<A = AttributeBag> {
             default:
                 return value;
         }
+    }
+
+    /**
+     * Get the memoized caster instance for a custom cast class.
+     */
+    protected caster(cast: Caster): Cast {
+        if (!this.casters.has(cast)) {
+            this.casters.set(cast, new cast());
+        }
+
+        return this.casters.get(cast) as Cast;
     }
 
     /**

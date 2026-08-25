@@ -443,6 +443,53 @@ describe('Model.casts', (): void => {
         expect(new Caster().set('custom', 'ABC').raw('custom')).toEqual('abc');
     });
 
+    test('instantiates a custom cast class once per model', (): void => {
+        class Counted implements Cast<string> {
+            /**
+             * The number of times the class has been instantiated.
+             */
+            static built: number = 0;
+
+            /**
+             * Count each instantiation.
+             */
+            constructor() {
+                Counted.built++;
+            }
+
+            /**
+             * Pass the raw value through on read.
+             */
+            get(value: unknown): string {
+                return String(value);
+            }
+
+            /**
+             * Pass the value through for storage.
+             */
+            set(value: string): unknown {
+                return value;
+            }
+        }
+
+        class Tally extends Model {
+            /**
+             * Get the attributes that should be cast.
+             */
+            override casts(): Casts<AttributeBag> {
+                return { label: Counted };
+            }
+        }
+
+        const tally: Tally = Tally.hydrate({ label: 'a' });
+
+        tally.get('label');
+        tally.get('label');
+        tally.set('label', 'b');
+
+        expect(Counted.built).toEqual(1);
+    });
+
     test('applies custom casts with memoized identity', (): void => {
         const person: Person = new Person({ settings: { theme: 'dark' } });
 
@@ -925,6 +972,20 @@ describe('Model.dirty', (): void => {
     });
 });
 
+describe('Model.clean', (): void => {
+    test('mirrors dirty for the model and single attributes', (): void => {
+        const item: Item = Item.hydrate({ name: 'Pen', price: 1 });
+
+        expect(item.clean()).toEqual(true);
+
+        item.set('name', 'Pencil');
+
+        expect(item.clean()).toEqual(false);
+        expect(item.clean('name')).toEqual(false);
+        expect(item.clean('price')).toEqual(true);
+    });
+});
+
 describe('Model.changes', (): void => {
     test('returns the changed raw attributes since the last sync', (): void => {
         const item: Item = new Item({ name: 'Pen' });
@@ -955,6 +1016,26 @@ describe('Model.original', (): void => {
 
         expect(item.original('price', 100)).toEqual(100);
         expect(item.original('price')).toBeUndefined();
+    });
+});
+
+describe('Model.is', (): void => {
+    test('matches models of the same type with equivalent attributes', (): void => {
+        const item: Item = Item.hydrate({ name: 'Pen', price: 1 });
+        const clone: Item = Item.hydrate({ name: 'Pen', price: 1 });
+
+        expect(item.is(clone)).toEqual(true);
+    });
+
+    test('rejects different types, attributes, and empty values', (): void => {
+        const item: Item = Item.hydrate({ name: 'Pen' });
+
+        expect(item.is(Item.hydrate({ name: 'Pencil' }))).toEqual(false);
+        expect(item.is(Item.hydrate({ name: 'Pen', price: 1 }))).toEqual(false);
+        expect(item.is(Item.hydrate({ title: 'Pen' }))).toEqual(false);
+        expect(item.is(User.hydrate({ name: 'Pen' }))).toEqual(false);
+        expect(item.is(null)).toEqual(false);
+        expect(item.is(undefined)).toEqual(false);
     });
 });
 
