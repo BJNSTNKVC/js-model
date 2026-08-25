@@ -265,6 +265,8 @@ class User extends Model<UserAttributes> {
 }
 ```
 
+The class is instantiated once per model and the instance is reused for every read and write of the attribute.
+
 ### Enum Casting
 
 Enums may be cast by passing the enum itself in the cast map. Values are validated against the enum on both read and write, and an invalid value throws a `TypeError`. Numeric enums are supported, including their reverse mappings, which are never treated as values:
@@ -435,6 +437,18 @@ user.dirty('first_name'); // true
 user.dirty('age');        // false
 ```
 
+#### clean()
+
+The `clean` method determines whether no attribute, or none of the given attributes, changed since the last sync:
+
+```ts
+user.set('first_name', 'Jane');
+
+user.clean();             // false
+user.clean('first_name'); // false
+user.clean('age');        // true
+```
+
 #### changes()
 
 The `changes` method returns the raw attributes that changed since the last sync:
@@ -483,6 +497,21 @@ The `replicate` method copies the model into a fresh, unsaved instance. The repl
 const copy: User = user.replicate('id');
 
 copy.dirty(); // true
+```
+
+### Comparing Models
+
+#### is()
+
+The `is` method determines whether another model is of the same type with equivalent raw attributes:
+
+```ts
+const original: User = User.hydrate({ id: 1, first_name: 'John' });
+const copy: User = User.hydrate({ id: 1, first_name: 'John' });
+
+original.is(copy);              // true
+original.is(new User());        // false
+original.is(null);              // false
 ```
 
 ### Serialization
