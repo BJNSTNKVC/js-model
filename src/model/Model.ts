@@ -185,7 +185,7 @@ export abstract class Model<A = AttributeBag> {
     }
 
     /**
-     * Get the original (last-synced) attributes with casts applied, or one of them.
+     * Get the attributes at the last sync, or a single one of them.
      */
     original(): AttributeBag<A>;
     original(key: Key<A>, fallback?: unknown): unknown;
@@ -201,19 +201,6 @@ export abstract class Model<A = AttributeBag> {
         }
 
         return output;
-    }
-
-    /**
-     * Get a copy of the raw original attributes, or a single raw original value.
-     */
-    rawOriginal(): AttributeBag<A>;
-    rawOriginal(key: Key<A>, fallback?: unknown): unknown;
-    rawOriginal(key?: string, fallback?: unknown): unknown {
-        if (key === undefined) {
-            return { ...this.originals };
-        }
-
-        return Object.hasOwn(this.originals, key) ? this.originals[key] : fallback;
     }
 
     /**
