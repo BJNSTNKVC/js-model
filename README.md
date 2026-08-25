@@ -22,7 +22,7 @@ import { Model, Attribute } from '@bjnstnkvc/model';
 
 ### Defining a Model
 
-To get started, define an interface describing your attributes, extend the `Model` class and merge the interface into it. The merge is what makes direct property access fully typed:
+To get started, define an interface describing your attributes and extend the `Model` class with it. The generic is what makes direct property access fully typed:
 
 ```ts
 import { Model, Attribute, type Attributes, type AttributeBag, type Casts } from '@bjnstnkvc/model';
@@ -65,9 +65,6 @@ class User extends Model<UserAttributes> {
     override defaults(): Partial<UserAttributes> {
         return { age: 18 };
     }
-}
-
-interface User extends UserAttributes {
 }
 ```
 

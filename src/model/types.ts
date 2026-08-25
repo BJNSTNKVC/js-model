@@ -1,5 +1,5 @@
 import type { Attribute } from './Attribute';
-import type { Model } from './Model';
+import type { BaseModel } from './Model';
 
 export type AttributeBag<T = Record<string, unknown>> = { [K in keyof T]?: unknown } & Record<string, unknown>;
 
@@ -42,6 +42,6 @@ export interface Cast<T = unknown> {
 
 export type Attributes<A> = { [K in keyof A & string]?: Attribute<A[K]> };
 
-export type Related = new () => Model<any>;
+export type Related = new () => BaseModel<any>;
 
 export type Relations<A> = { [K in keyof A & string]?: Related };
