@@ -14,7 +14,7 @@ describe('Main', (): void => {
     });
 
     test('exports individual modules', async (): Promise<void> => {
-        const module = await import('../src/main');
+        const module: typeof import('../src/main') = await import('../src/main');
 
         expect(module.Model).toBe(Model);
         expect(module.BaseModel).toBe(BaseModel);

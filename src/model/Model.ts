@@ -67,7 +67,7 @@ export abstract class BaseModel<A = AttributeBag> {
     static hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag): T;
     static hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag[]): T[];
     static hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag | AttributeBag[]): T | T[] {
-        const hydrated = (entry: AttributeBag): T => {
+        const hydrated: (entry: AttributeBag) => T = (entry: AttributeBag): T => {
             const model: T = new this();
 
             model.attributes = { ...entry };
@@ -101,9 +101,11 @@ export abstract class BaseModel<A = AttributeBag> {
             const result: unknown = definition.set(value, this.attributes);
 
             if (this.plain(result)) {
-                for (const [written, raw] of Object.entries(result)) {
-                    this.attributes[written] = raw;
-                    this.memo.delete(written);
+                const written: [string, unknown][] = Object.entries(result);
+
+                for (const [name, raw] of written) {
+                    this.attributes[name] = raw;
+                    this.memo.delete(name);
                 }
             } else {
                 this.attributes[key] = result;
@@ -199,8 +201,9 @@ export abstract class BaseModel<A = AttributeBag> {
      */
     changes(): AttributeBag<A> {
         const changed: AttributeBag = {};
+        const entries: [string, unknown][] = Object.entries(this.attributes);
 
-        for (const [key, value] of Object.entries(this.attributes)) {
+        for (const [key, value] of entries) {
             if (!Object.hasOwn(this.originals, key) || !this.equivalent(value, this.originals[key])) {
                 changed[key] = value;
             }
@@ -220,8 +223,9 @@ export abstract class BaseModel<A = AttributeBag> {
         }
 
         const output: AttributeBag = {};
+        const names: string[] = Object.keys(this.originals);
 
-        for (const name of Object.keys(this.originals)) {
+        for (const name of names) {
             output[name] = this.transform(name, this.originals);
         }
 
@@ -303,7 +307,9 @@ export abstract class BaseModel<A = AttributeBag> {
     except(...keys: Key<A>[]): AttributeBag<A> {
         const output: AttributeBag = {};
 
-        for (const key of Object.keys(this.attributes)) {
+        const names: string[] = Object.keys(this.attributes);
+
+        for (const key of names) {
             if (!keys.includes(key)) {
                 output[key] = this.transform(key, this.attributes, this.memo);
             }
@@ -641,8 +647,9 @@ export abstract class BaseModel<A = AttributeBag> {
 
         if (this.plain(value)) {
             const copied: AttributeBag = {};
+            const entries: [string, unknown][] = Object.entries(value);
 
-            for (const [key, entry] of Object.entries(value)) {
+            for (const [key, entry] of entries) {
                 copied[key] = this.snapshot(entry);
             }
 
