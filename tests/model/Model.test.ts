@@ -382,7 +382,7 @@ describe('Model.casts', (): void => {
     });
 
     test('casts datetimes from strings, unix seconds, numeric strings, and Dates', (): void => {
-        const reader = (raw: unknown): Date => Caster.hydrate({ datetime: raw }).get('datetime') as Date;
+        const reader: (raw: unknown) => Date = (raw: unknown): Date => Caster.hydrate({ datetime: raw }).get('datetime') as Date;
 
         expect(reader('2026-08-23T10:00:00.000Z').toISOString()).toEqual('2026-08-23T10:00:00.000Z');
         expect(reader(1756000000).getTime()).toEqual(1756000000000);

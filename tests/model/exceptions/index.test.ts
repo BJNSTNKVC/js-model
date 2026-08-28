@@ -7,7 +7,7 @@ describe('Exceptions', (): void => {
     });
 
     test('exports individual modules', async (): Promise<void> => {
-        const module = await import('../../../src/model/exceptions');
+        const module: typeof import('../../../src/model/exceptions') = await import('../../../src/model/exceptions');
 
         expect(module.MassAssignmentException).toBe(MassAssignmentException);
     });
