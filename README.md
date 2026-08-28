@@ -499,12 +499,12 @@ user.forget('address');
 
 ### Mass Assignment
 
-By default every attribute is fillable. Once `fillable` or `guarded` lists are declared, offending keys are silently discarded during `fill`, matching Eloquent. Enabling strict mode throws a `MassAssignmentError` instead:
+By default every attribute is fillable. Once `fillable` or `guarded` lists are declared, offending keys are silently discarded during `fill`, matching Eloquent. Enabling strict mode throws a `MassAssignmentException` instead:
 
 ```ts
 Model.strict = true;
 
-new User({ id: 1 }); // throws MassAssignmentError
+new User({ id: 1 }); // throws MassAssignmentException
 ```
 
 #### Model.hydrate()

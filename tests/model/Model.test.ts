@@ -6,7 +6,7 @@ import {
     type Cast,
     type Casts,
     type Relations,
-    MassAssignmentError,
+    MassAssignmentException,
     Model,
 } from '../../src/main';
 
@@ -771,7 +771,7 @@ describe('Model.fill', (): void => {
         Model.strict = true;
 
         try {
-            expect((): User => new User({ id: 1 })).toThrow(MassAssignmentError);
+            expect((): User => new User({ id: 1 })).toThrow(MassAssignmentException);
         } finally {
             Model.strict = false;
         }

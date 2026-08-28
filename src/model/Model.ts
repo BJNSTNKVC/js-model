@@ -1,5 +1,5 @@
 import type { Attribute } from './Attribute';
-import { MassAssignmentError } from './MassAssignmentError';
+import { MassAssignmentException } from './exceptions';
 import type { AttributeBag, Attributes, Cast, Caster, Casts, CastType, Enum, Key, Related, Relations } from './types';
 
 const KNOWN: readonly string[] = [
@@ -166,7 +166,7 @@ export abstract class BaseModel<A = AttributeBag> {
             }
 
             if ((this.constructor as typeof BaseModel).strict) {
-                throw new MassAssignmentError(`Add [${key}] to the fillable list to enable mass assignment on [${this.constructor.name}].`);
+                throw new MassAssignmentException(`Add [${key}] to the fillable list to enable mass assignment on [${this.constructor.name}].`);
             }
         }
 

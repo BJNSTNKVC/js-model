@@ -1,0 +1,1 @@
+export { MassAssignmentException } from './MassAssignmentException';
