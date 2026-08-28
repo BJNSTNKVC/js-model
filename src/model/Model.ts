@@ -896,7 +896,7 @@ export type Model<A = AttributeBag> = BaseModel<A> & A;
 // The abstract class is published through an abstract construct signature that
 // intersects every instance with its attribute definition, which is what gives
 // a subclass typed attribute properties without declaring an interface merge.
-export const Model = BaseModel as unknown as (abstract new <A = AttributeBag>(attributes?: Partial<A> & AttributeBag) => Model<A>) & {
+type ModelConstructor = (abstract new <A = AttributeBag>(attributes?: Partial<A> & AttributeBag) => Model<A>) & {
     /**
      * When true, mass assignment of non-fillable keys throws instead of discarding.
      */
@@ -908,3 +908,5 @@ export const Model = BaseModel as unknown as (abstract new <A = AttributeBag>(at
     hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag): T;
     hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag[]): T[];
 };
+
+export const Model: ModelConstructor = BaseModel as unknown as ModelConstructor;
