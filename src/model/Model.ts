@@ -131,7 +131,9 @@ export abstract class BaseModel<A = AttributeBag> {
      * Mass assign the given attributes.
      */
     fill(attributes: Partial<A> & AttributeBag): this {
-        for (const [key, value] of Object.entries(attributes)) {
+        const entries: [string, unknown][] = Object.entries(attributes);
+
+        for (const [key, value] of entries) {
             this.set(key, value);
         }
 
@@ -280,8 +282,9 @@ export abstract class BaseModel<A = AttributeBag> {
      */
     toJSON(): AttributeBag<A> {
         const output: AttributeBag = {};
+        const names: string[] = Object.keys(this.attributes);
 
-        for (const key of Object.keys(this.attributes)) {
+        for (const key of names) {
             output[key] = this.transform(key, this.attributes, this.memo);
         }
 
@@ -764,10 +767,12 @@ export type Model<A = AttributeBag> = BaseModel<A> & A;
 // The abstract class is published through an abstract construct signature that
 // intersects every instance with its attribute definition, which is what gives
 // a subclass typed attribute properties without declaring an interface merge.
-export const Model = BaseModel as unknown as (abstract new <A = AttributeBag>(attributes?: Partial<A> & AttributeBag) => Model<A>) & {
+type ModelConstructor = (abstract new <A = AttributeBag>(attributes?: Partial<A> & AttributeBag) => Model<A>) & {
     /**
      * Create models from trusted raw data, bypassing mutators, synced clean.
      */
     hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag): T;
     hydrate<T extends BaseModel<any>>(this: new () => T, attributes: AttributeBag[]): T[];
 };
+
+export const Model: ModelConstructor = BaseModel as unknown as ModelConstructor;
