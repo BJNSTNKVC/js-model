@@ -97,7 +97,7 @@ export abstract class BaseModel<A = AttributeBag> {
 
         const definition: Attribute | undefined = (this.resolved.mutators as Record<string, Attribute | undefined>)[key];
 
-        if (definition !== undefined && definition.set !== undefined) {
+        if (definition?.set !== undefined) {
             const result: unknown = definition.set(value, this.attributes);
 
             if (this.plain(result)) {
@@ -155,7 +155,7 @@ export abstract class BaseModel<A = AttributeBag> {
     has(key: string): boolean {
         const definition: Attribute | undefined = (this.resolved.mutators as Record<string, Attribute | undefined>)[key];
 
-        return Object.hasOwn(this.attributes, key) || (definition !== undefined && definition.get !== undefined);
+        return Object.hasOwn(this.attributes, key) || definition?.get !== undefined;
     }
 
     /**
@@ -355,15 +355,15 @@ export abstract class BaseModel<A = AttributeBag> {
     protected transform(key: string, attributes: AttributeBag, memo?: Map<string, unknown>): unknown {
         const definition: Attribute | undefined = (this.resolved.mutators as Record<string, Attribute | undefined>)[key];
 
-        if (definition !== undefined && definition.get !== undefined) {
-            if (definition.cached && memo !== undefined && memo.has(key)) {
+        if (definition?.get !== undefined) {
+            if (definition.cached && memo?.has(key)) {
                 return memo.get(key);
             }
 
             const computed: unknown = definition.get(attributes[key], attributes);
 
-            if (definition.cached && memo !== undefined) {
-                memo.set(key, computed);
+            if (definition.cached) {
+                memo?.set(key, computed);
             }
 
             return computed;
@@ -372,14 +372,14 @@ export abstract class BaseModel<A = AttributeBag> {
         const relation: Related | undefined = (this.resolved.relations as Record<string, Related | undefined>)[key];
 
         if (relation !== undefined) {
-            if (memo !== undefined && memo.has(key)) {
+            if (memo?.has(key)) {
                 return memo.get(key);
             }
 
             const related: unknown = this.relate(relation, attributes[key]);
 
-            if (memo !== undefined && related !== null && related !== undefined) {
-                memo.set(key, related);
+            if (related !== null && related !== undefined) {
+                memo?.set(key, related);
             }
 
             return related;
@@ -388,14 +388,14 @@ export abstract class BaseModel<A = AttributeBag> {
         const cast: CastType | Caster | Enum | undefined = (this.resolved.casts as Record<string, CastType | Caster | Enum | undefined>)[key];
 
         if (cast !== undefined) {
-            if (memo !== undefined && memo.has(key)) {
+            if (memo?.has(key)) {
                 return memo.get(key);
             }
 
             const value: unknown = this.cast(cast, attributes[key], key, attributes);
 
-            if (memo !== undefined && typeof value === 'object' && value !== null) {
-                memo.set(key, value);
+            if (typeof value === 'object' && value !== null) {
+                memo?.set(key, value);
             }
 
             return value;
