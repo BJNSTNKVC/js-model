@@ -18,6 +18,18 @@ and then import it into your project
 import { Model, Attribute } from '@bjnstnkvc/model';
 ```
 
+### Lite
+
+If mass assignment rules and serialization visibility are more than you need, the `lite` branch carries a simplified variant of the package. It keeps attribute access, casts, accessors and mutators, relationships, defaults, dirty tracking and serialization, and drops `fillable`, `guarded`, strict mode, `hidden`, `visible`, `appends` together with the `hide`, `show`, `append` and `forceFill` methods, so a model is left to do nothing but model data.
+
+It is not published to npm. Install it from the branch, which npm builds during install:
+
+```bash
+npm install github:BJNSTNKVC/js-model#lite
+```
+
+The API is otherwise the one documented below, so everything except the Mass Assignment section and the visibility rules in Serialization applies there too.
+
 ## Usage
 
 ### Defining a Model
