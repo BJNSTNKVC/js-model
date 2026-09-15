@@ -573,7 +573,7 @@ export abstract class BaseModel<A = AttributeBag> {
     }
 
     /**
-     * Format a numeric value as a fixed-decimal string, e.g. decimal:2 → "3.14".
+     * Format a numeric value as a fixed-decimal string using the precision declared by the cast.
      */
     protected decimal(cast: string, value: unknown, key: string): string {
         return Number(value).toFixed(this.places(cast, key));
@@ -628,7 +628,7 @@ export abstract class BaseModel<A = AttributeBag> {
     }
 
     /**
-     * Determine whether a value is a plain object, i.e. a multi-attribute mutator result.
+     * Determine whether a value is a plain object rather than a class instance or other exotic value.
      */
     protected plain(value: unknown): value is AttributeBag {
         if (typeof value !== 'object' || value === null) {
