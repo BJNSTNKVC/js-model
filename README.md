@@ -4,15 +4,15 @@ TypeScript equivalent of the [Laravel Eloquent](https://laravel.com/docs/12.x/el
 
 ## Installation & setup
 
-### NPM
+### Git
 
-You can install the package via npm:
+This branch is not published to npm. Install it straight from the branch:
 
 ```bash
-npm install @bjnstnkvc/model
+npm install github:BJNSTNKVC/js-model#lite
 ```
 
-and then import it into your project
+npm clones the branch, installs its dependencies and builds it on install, so no published artifact is needed. Once installed, import it into your project
 
 ```ts
 import { Model, Attribute } from '@bjnstnkvc/model';
