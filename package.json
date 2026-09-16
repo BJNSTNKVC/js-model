@@ -1,6 +1,6 @@
 {
   "name": "@bjnstnkvc/model",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "TypeScript port of Laravel Eloquent's data-modeling layer.",
   "type": "module",
   "main": "./dist/main.cjs",
